@@ -83,6 +83,39 @@ Entries are written at the moment the friction happens, not reconstructed afterw
 
 ---
 
+## FL-004 — AWS sign-up: unclear "Complete your account setup" page, then Free plan ineligibility surfaced late
+
+- **Date:** 2026-09-30
+- **Tool / API / SDK:** AWS account sign-up and AWS Management Console (Free plan / paid plan)
+- **What I was trying to do:** Create an AWS account for PetCheck and start setting up IAM and the CLI.
+- **Steps taken:**
+  1. Signed up for a new AWS account; the console home showed the Free plan with credits.
+  2. Navigated from the console and landed on a "Complete your account setup" page ("either not finished registering, or your account is currently on free plan").
+  3. Clicked "Complete your AWS registration" and was then told "You are not eligible for the free plan" because my information matched a previously registered account, and that I would be moved to a paid plan without the $200 credit.
+- **Expected result:** Either a clear statement of which setup step was incomplete, or the Free plan eligibility decision shown up front during sign-up (before the console showed a Free plan with credits).
+- **Actual result:** The first page didn't say *which* of the two cases applied. Eligibility was only revealed after sign-up appeared complete, which forced a billing decision mid-setup.
+- **Severity:** Medium (no technical block, but a surprise billing decision and ~15 min of confusion)
+- **Workaround:** Accepted the paid plan, created a $5 monthly budget alert before creating any resources, and kept all services within always-free limits.
+- **Suggested improvement:** Check Free plan eligibility during sign-up and show the result before the account is created; on the "Complete your account setup" page, show a per-item checklist status (e.g. "Payment verified ✓ / Support plan ✗") instead of listing every possible cause.
+
+---
+
+## FL-005 — MCP SDK's Node Streamable HTTP transport fails behind serverless-http on AWS Lambda
+
+- **Date:** 2026-09-30
+- **Tool / API / SDK:** `@modelcontextprotocol/sdk` 1.31 (`StreamableHTTPServerTransport`), `serverless-http` 3.2, AWS Lambda (Node.js 22, Function URL)
+- **What I was trying to do:** Deploy the PetCheck MCP server (Express app, stateless Streamable HTTP) to AWS Lambda behind a Function URL.
+- **Steps taken:**
+  1. Wrapped the working Express app with `serverless-http` and deployed it to Lambda with a Function URL.
+  2. Called `GET /health` and `POST /mcp` (`tools/list`) against the Function URL.
+- **Expected result:** Both endpoints work, as they do locally.
+- **Actual result:** `/health` (plain Express) worked, but `POST /mcp` returned no tool list. The SDK's Node transport internally converts Node `req`/`res` to Web Requests via `@hono/node-server`, which doesn't work with `serverless-http`'s emulated request/response objects. Nothing in the SDK docs warns about this.
+- **Severity:** High (the core MCP endpoint didn't work on Lambda; ~30 min to diagnose)
+- **Workaround:** In the Lambda handler, skipped Express and used the SDK's `WebStandardStreamableHTTPServerTransport`: converted the Function URL event into a standard `Request`, called `transport.handleRequest(request, { parsedBody })`, and mapped the returned `Response` back to the Lambda result (with `enableJsonResponse: true`). Added a test that calls the handler with fake Function URL events.
+- **Suggested improvement:** Document a "Deploying to AWS Lambda" recipe for the MCP TypeScript SDK that uses the web-standard transport, and note that the Node transport requires a real Node HTTP server (not serverless adapters). An official Lambda example in the Alexa+ MCP Toolkit docs would help, since Lambda is the natural host for Alexa+ add-ons.
+
+---
+
 <!-- Add new entries above this line, newest at the bottom. Focus on Amazon tooling:
      Alexa+ MCP Toolkit & QuickStart, Alexa developer console, AWS (Lambda, DynamoDB,
      EventBridge, Bedrock), Kiro, and the MCP SDK / Inspector. -->
