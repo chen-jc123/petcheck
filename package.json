@@ -9,12 +9,23 @@
     "start": "tsx src/server.ts",
     "build": "tsc",
     "smoke": "tsx test/smoke.ts",
-    "inspector": "npx @modelcontextprotocol/inspector"
+    "inspector": "npx @modelcontextprotocol/inspector",
+    "dev:dynamo": "STORAGE=dynamodb tsx watch src/server.ts",
+    "db:create": "tsx scripts/db.ts create",
+    "db:reset": "tsx scripts/db.ts reset",
+    "db:status": "tsx scripts/db.ts status",
+    "test:storage": "tsx test/storage.ts",
+    "build:lambda": "node scripts/build-lambda.mjs",
+    "deploy": "bash scripts/deploy.sh",
+    "logs": "aws logs tail /aws/lambda/petcheck-mcp --follow",
+    "test:lambda": "tsx test/lambda.ts"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.700.0",
+    "@aws-sdk/lib-dynamodb": "^3.700.0",
     "@modelcontextprotocol/sdk": "^1.24.0",
     "express": "^5.1.0",
     "zod": "^3.25.76"
@@ -22,6 +33,7 @@
   "devDependencies": {
     "@types/express": "^5.0.3",
     "@types/node": "^22.10.0",
+    "esbuild": "^0.25.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0"
   }

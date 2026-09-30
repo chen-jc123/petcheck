@@ -75,7 +75,42 @@ const db = {
   visits: [] as VetVisit[],
 };
 
+export type Kind = "pet" | "event" | "note" | "visit";
+export type Change = { kind: Kind; item: Pet | CareEvent | Note | VetVisit };
+
+/** New records created since the last takeChanges() — what a persistent store must save. */
+let changes: Change[] = [];
+
+function insert(kind: "pet", item: Pet): void;
+function insert(kind: "event", item: CareEvent): void;
+function insert(kind: "note", item: Note): void;
+function insert(kind: "visit", item: VetVisit): void;
+function insert(kind: Kind, item: Pet | CareEvent | Note | VetVisit): void {
+  if (kind === "pet") db.pets.push(item as Pet);
+  else if (kind === "event") db.events.push(item as CareEvent);
+  else if (kind === "note") db.notes.push(item as Note);
+  else db.visits.push(item as VetVisit);
+  changes.push({ kind, item });
+}
+
+/** Return and clear the list of records created since the last call. */
+export function takeChanges(): Change[] {
+  const out = changes;
+  changes = [];
+  return out;
+}
+
+/** Replace the in-memory data with records loaded from a persistent store. */
+export function loadState(state: { pets: Pet[]; events: CareEvent[]; notes: Note[]; visits: VetVisit[] }): void {
+  db.pets = [...state.pets];
+  db.events = [...state.events];
+  db.notes = [...state.notes];
+  db.visits = [...state.visits];
+  changes = [];
+}
+
 export function resetStore(): void {
+  changes = [];
   db.pets = [];
   db.events = [];
   db.notes = [];
@@ -123,7 +158,7 @@ function seedHistory(): void {
     return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
   };
   const log = (pet: Pet, activity: Activity, by: string, date: string, time: string) =>
-    db.events.push({ id: newId("evt"), petId: pet.id, activity, by, at: localToDate(date, time).toISOString() });
+    insert("event", { id: newId("evt"), petId: pet.id, activity, by, at: localToDate(date, time).toISOString() });
 
   pastDays.forEach((date, i) => {
     const daysAgo = pastDays.length - i;
@@ -140,7 +175,7 @@ function seedHistory(): void {
   });
 
   const noteDay = pastDays[pastDays.length - 2];
-  db.notes.push({
+  insert("note", {
     id: newId("note"),
     petId: mochi.id,
     text: "ate less than usual at dinner",
@@ -218,7 +253,7 @@ export function addPet(input: { name: string; species: string; routine?: Routine
     routine: [...(input.routine ?? [])].sort((a, b) => hhmmToMinutes(a.time) - hhmmToMinutes(b.time)),
     createdOn: input.createdOn ?? localParts(now()).date,
   };
-  db.pets.push(pet);
+  insert("pet", pet);
   const routineText = pet.routine.length
     ? ` Routine: ${pet.routine.map((r) => `${r.label ?? r.activity} at ${minutesToSpoken(hhmmToMinutes(r.time))}`).join(", ")}.`
     : "";
@@ -264,7 +299,7 @@ export function logCare(input: {
     at: now().toISOString(),
     detail: input.detail,
   };
-  db.events.push(event);
+  insert("event", event);
   return {
     status: "logged",
     event,
@@ -353,7 +388,7 @@ export function addNote(input: { pet?: string; text: string; by?: string }): { n
     by: personName(input.by),
     at: now().toISOString(),
   };
-  db.notes.push(note);
+  insert("note", note);
   const week = new Set(lastNLocalDates(7));
   const weekCount = db.notes.filter((n) => n.petId === pet.id && week.has(localParts(new Date(n.at)).date)).length;
   return {
@@ -373,7 +408,7 @@ export function addVetVisit(input: { pet?: string; date: string; time?: string; 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) throw new PetCheckError(`Date "${input.date}" should look like 2026-10-06.`);
   if (input.time && !/^\d{1,2}:\d{2}$/.test(input.time)) throw new PetCheckError(`Time "${input.time}" should look like 10:00.`);
   const visit: VetVisit = { id: newId("vet"), petId: pet.id, date: input.date, time: input.time, reason: input.reason };
-  db.visits.push(visit);
+  insert("visit", visit);
   return {
     visit,
     message:
@@ -495,5 +530,5 @@ export function overdueTasks(): { pet: string; label: string; time: string }[] {
 
 /** Test hook: insert an event at a specific time. */
 export function _insertEvent(e: Omit<CareEvent, "id">): void {
-  db.events.push({ ...e, id: newId("evt") });
+  insert("event", { ...e, id: newId("evt") });
 }

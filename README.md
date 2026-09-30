@@ -61,7 +61,8 @@ Requires Node 20+.
 
 ```bash
 npm install
-npm run smoke      # logic checks, no server needed
+npm run smoke         # logic checks, no server needed
+npm run test:storage  # persistence checks with a fake database
 npm run dev        # starts http://localhost:3000/mcp (with demo pets Mochi and Biscuit)
 ```
 
@@ -77,9 +78,32 @@ then **Tools → List Tools**.
 Environment variables: `PORT` (default 3000), `HOUSEHOLD_TZ` (default `America/Detroit`),
 `SEED=false` to start with no demo pets.
 
+### Storage: memory or DynamoDB
+
+By default data lives in memory (resets on restart). To use DynamoDB (requires `aws configure`):
+
+```bash
+npm run db:create     # one-time: creates the "petcheck" table (free-tier capacity)
+npm run db:reset      # load fresh demo data (Mochi, Biscuit, last week's history)
+npm run dev:dynamo    # run the server against DynamoDB
+npm run db:status     # see what's stored
+```
+
+Single-table design: `pk = HH#<household>`, `sk = PET#… | EVT#<time>#… | NOTE#<time>#… | VET#<date>#…`.
+Each request loads the household with one Query, runs the same logic, and batch-writes new records.
+The server holds no state between requests, so it runs unchanged on AWS Lambda.
+
+Extra variables: `STORAGE=dynamodb`, `TABLE_NAME` (default `petcheck`), `HOUSEHOLD_ID` (default `demo`),
+`AWS_REGION` (default `us-east-1`).
+
 ## AWS services used
 
-_TODO: list each service and how it's integrated (AWS Builder challenge)._
+| Service | How PetCheck uses it |
+|---|---|
+| **Amazon DynamoDB** | Stores pets, care logs, notes and vet visits (single table, provisioned within free tier) |
+| AWS Lambda | _next: hosts the MCP server_ |
+| Amazon EventBridge Scheduler | _next: missed-task checks_ |
+| Amazon Bedrock | _next: LLM for the simulated Alexa+ page_ |
 
 ## Region note
 
