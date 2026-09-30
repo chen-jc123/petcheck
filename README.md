@@ -107,6 +107,8 @@ refreshes every few seconds, so a task logged by voice appears within moments. O
 Demo controls (bottom right): "Pretend it's 6:30 PM" and **Run missed-task check** run the real alert
 logic at a simulated time. Tip: open `<url>/?time=18:30#key=<key>` to preload both.
 
+![Household page](docs/screenshots/household-page.png)
+
 ![Owner alert email](docs/screenshots/alert-email-mochi.png)
 
 ## Missed-task alerts

@@ -648,15 +648,20 @@ function lateText(min: number): string {
   return m ? `${h} hour${h > 1 ? "s" : ""} ${m} minutes` : `${h} hour${h > 1 ? "s" : ""}`;
 }
 
-/** Today's alerts, newest first, each marked resolved if the task has since been logged. */
+/**
+ * Today's alerts up to now(), newest first, each marked resolved if the task has since
+ * been logged. Alerts raised by a demo run at a later simulated time stay hidden until
+ * the view reaches that time.
+ */
 export function todayAlerts(): (Alert & { resolved: boolean })[] {
   const { date } = localParts(now());
+  const nowIso = now().toISOString();
   const doneSlots = new Set<string>();
   for (const pet of db.pets) {
     for (const s of todaySlots(pet)) if (s.state === "done") doneSlots.add(`${pet.id}|${s.label}@${s.time}`);
   }
   return db.alerts
-    .filter((a) => a.date === date)
+    .filter((a) => a.date === date && a.at <= nowIso)
     .sort((a, b) => b.at.localeCompare(a.at))
     .map((a) => ({ ...a, resolved: doneSlots.has(`${a.petId}|${a.slot}`) }));
 }

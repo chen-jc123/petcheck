@@ -153,6 +153,7 @@
 (function () {
   "use strict";
   var KEY_STORE = "petcheck.key";
+  var LOCALE = "en-US"; // PetCheck speaks English; keep dates/times consistent with Alexa's replies
   var POLL_MS = 4000;
   var state = { key: null, demoTime: null, seenEvents: null, seenAlerts: null, timer: null };
 
@@ -170,7 +171,7 @@
     } catch (e) { return null; }
   }
   function spokenTime(iso) {
-    return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    return new Date(iso).toLocaleTimeString(LOCALE, { hour: "numeric", minute: "2-digit" });
   }
   function hhmmSpoken(hhmm) {
     var p = hhmm.split(":"), h = +p[0], m = p[1];
@@ -198,7 +199,7 @@
   // --- Rendering -----------------------------------------------------------
   function render(v) {
     var d = new Date(v.date + "T12:00:00");
-    $("date").textContent = d.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+    $("date").textContent = d.toLocaleDateString(LOCALE, { weekday: "long", month: "long", day: "numeric" });
 
     var pets = $("pets"); pets.textContent = "";
     if (!v.pets.length) pets.appendChild(el("p", "empty", "No pets yet. Say “Alexa, add our cat Mochi.”"));
@@ -230,7 +231,7 @@
     // Alerts: unresolved first, then resolved.
     var alerts = $("alerts"); alerts.textContent = "";
     var sorted = v.alerts.slice().sort(function (a, b) { return (a.resolved - b.resolved) || b.at.localeCompare(a.at); });
-    if (!sorted.length) alerts.appendChild(el("p", "empty", "No missed tasks. 🎉"));
+    if (!sorted.length) alerts.appendChild(el("p", "empty", "No alerts right now."));
     var firstLoad = state.seenAlerts === null, seenA = state.seenAlerts || {};
     sorted.forEach(function (a) {
       var box = el("div", "alert " + a.level + (a.resolved ? " resolved" : "") + (!firstLoad && !seenA[a.id] ? " new" : ""));
@@ -266,7 +267,7 @@
     var visits = $("visits"); visits.textContent = "";
     $("visits-card").hidden = !v.upcomingVisits.length;
     v.upcomingVisits.forEach(function (x) {
-      var day = new Date(x.date + "T12:00:00").toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+      var day = new Date(x.date + "T12:00:00").toLocaleDateString(LOCALE, { weekday: "long", month: "long", day: "numeric" });
       visits.appendChild(el("div", "note", x.pet + " · " + day + (x.time ? " at " + hhmmSpoken(x.time) : "") + (x.reason ? " — " + x.reason : "")));
     });
   }

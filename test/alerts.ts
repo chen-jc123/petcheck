@@ -44,5 +44,9 @@ a = checkMissedTasks();
 assert.ok(!a.some((x) => x.pet === "Mochi" && x.label === "dinner"), "no alerts for a task that's done");
 show("7:40 PM", a);
 
+at("17:00");
+assert.equal(todayAlerts().length, 0, "alerts raised later in the day are hidden at 5 PM");
+console.log("✔ 5:00 PM view: alerts from later (simulated) times are hidden");
+
 setDemoOffset(0);
 console.log("\nAll alert checks passed.");
