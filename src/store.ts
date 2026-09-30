@@ -60,6 +60,29 @@ export interface VetVisit {
 export const DUPLICATE_WINDOW_MIN = 30;
 /** A routine task counts as overdue this long after its scheduled time. */
 export const OVERDUE_GRACE_MIN = 30;
+/** Missed-task alerts: remind the household at +30 min, escalate to the owner at +60 min. */
+export const REMIND_AFTER_MIN = OVERDUE_GRACE_MIN;
+export const ESCALATE_AFTER_MIN = 60;
+/**
+ * Tasks more than this late are skipped. The scheduler runs every 5 minutes, so it
+ * has already alerted about them; this also avoids an alert flood after downtime.
+ */
+export const MAX_ALERT_AGE_MIN = 180;
+
+export type AlertLevel = "household" | "owner";
+
+export interface Alert {
+  id: string;
+  petId: string;
+  pet: string;
+  level: AlertLevel;
+  date: string; // household-local date of the missed task
+  slot: string; // e.g. "dinner@18:00" — identifies the routine task
+  label: string;
+  time: string; // HH:MM the task was due
+  at: string; // UTC ISO when the alert was raised
+  message: string;
+}
 
 let seq = 0;
 const newId = (prefix: string) => `${prefix}_${Date.now().toString(36)}_${(seq++).toString(36)}`;
@@ -73,10 +96,11 @@ const db = {
   events: [] as CareEvent[],
   notes: [] as Note[],
   visits: [] as VetVisit[],
+  alerts: [] as Alert[],
 };
 
-export type Kind = "pet" | "event" | "note" | "visit";
-export type Change = { kind: Kind; item: Pet | CareEvent | Note | VetVisit };
+export type Kind = "pet" | "event" | "note" | "visit" | "alert";
+export type Change = { kind: Kind; item: Pet | CareEvent | Note | VetVisit | Alert };
 
 /** New records created since the last takeChanges() — what a persistent store must save. */
 let changes: Change[] = [];
@@ -85,10 +109,12 @@ function insert(kind: "pet", item: Pet): void;
 function insert(kind: "event", item: CareEvent): void;
 function insert(kind: "note", item: Note): void;
 function insert(kind: "visit", item: VetVisit): void;
-function insert(kind: Kind, item: Pet | CareEvent | Note | VetVisit): void {
+function insert(kind: "alert", item: Alert): void;
+function insert(kind: Kind, item: Pet | CareEvent | Note | VetVisit | Alert): void {
   if (kind === "pet") db.pets.push(item as Pet);
   else if (kind === "event") db.events.push(item as CareEvent);
   else if (kind === "note") db.notes.push(item as Note);
+  else if (kind === "alert") db.alerts.push(item as Alert);
   else db.visits.push(item as VetVisit);
   changes.push({ kind, item });
 }
@@ -101,11 +127,18 @@ export function takeChanges(): Change[] {
 }
 
 /** Replace the in-memory data with records loaded from a persistent store. */
-export function loadState(state: { pets: Pet[]; events: CareEvent[]; notes: Note[]; visits: VetVisit[] }): void {
+export function loadState(state: {
+  pets: Pet[];
+  events: CareEvent[];
+  notes: Note[];
+  visits: VetVisit[];
+  alerts?: Alert[];
+}): void {
   db.pets = [...state.pets];
   db.events = [...state.events];
   db.notes = [...state.notes];
   db.visits = [...state.visits];
+  db.alerts = [...(state.alerts ?? [])];
   changes = [];
 }
 
@@ -115,6 +148,7 @@ export function resetStore(): void {
   db.events = [];
   db.notes = [];
   db.visits = [];
+  db.alerts = [];
 }
 
 export function seedDemoData(): void {
@@ -333,16 +367,38 @@ export interface SlotStatus {
  * activity in time order: the first feed of the day satisfies breakfast, the
  * second satisfies dinner, and so on.
  */
+/**
+ * Match a day's logged events to routine slots. Each event (in time order) fills the
+ * *nearest* open slot of the same activity, so a 7 PM feeding counts as dinner even
+ * if breakfast was missed. Returns the matched event (or undefined) per routine item.
+ */
+function matchEvents(routine: RoutineItem[], events: CareEvent[]): (CareEvent | undefined)[] {
+  const matched: (CareEvent | undefined)[] = routine.map(() => undefined);
+  for (const e of [...events].sort((a, b) => a.at.localeCompare(b.at))) {
+    const eMin = localParts(new Date(e.at)).minutes;
+    let best = -1;
+    let bestDist = Infinity;
+    routine.forEach((r, i) => {
+      if (r.activity !== e.activity || matched[i]) return;
+      const dist = Math.abs(hhmmToMinutes(r.time) - eMin);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = i;
+      }
+    });
+    if (best >= 0) matched[best] = e;
+  }
+  return matched;
+}
+
 export function todaySlots(pet: Pet): SlotStatus[] {
   const { date, minutes: nowMin } = localParts(now());
-  const events = eventsOn(pet.id, date);
-  const used = new Set<string>();
-  return pet.routine.map((r) => {
-    const match = events.find((e) => e.activity === r.activity && !used.has(e.id));
+  const matches = matchEvents(pet.routine, eventsOn(pet.id, date));
+  return pet.routine.map((r, i) => {
+    const match = matches[i];
     const slotMin = hhmmToMinutes(r.time);
     const base = { activity: r.activity, label: r.label ?? r.activity, time: r.time };
     if (match) {
-      used.add(match.id);
       return { ...base, state: "done" as const, doneBy: match.by, doneAt: match.at };
     }
     if (nowMin >= slotMin + OVERDUE_GRACE_MIN) return { ...base, state: "overdue" as const };
@@ -434,22 +490,20 @@ export function weeklySummary(input: { pet?: string }): { message: string; stats
   for (const date of dates) {
     const events = eventsOn(pet.id, date);
     for (const e of events) helpers.set(e.by, (helpers.get(e.by) ?? 0) + 1);
-    const used = new Set<string>();
-    for (const r of pet.routine) {
-      // Only count today's slots that are already past due.
-      if (date === today && nowMin < hhmmToMinutes(r.time) + OVERDUE_GRACE_MIN) continue;
+    const matches = matchEvents(pet.routine, events);
+    pet.routine.forEach((r, i) => {
+      // Only count today's slots that are already past due (or already done).
+      if (date === today && !matches[i] && nowMin < hhmmToMinutes(r.time) + OVERDUE_GRACE_MIN) return;
       const stat = byActivity.get(r.activity) ?? { done: 0, expected: 0 };
       stat.expected++;
-      const match = events.find((e) => e.activity === r.activity && !used.has(e.id));
-      if (match) {
-        used.add(match.id);
+      if (matches[i]) {
         stat.done++;
       } else {
         const label = r.label ?? r.activity;
         missed.set(label, [...(missed.get(label) ?? []), relativeDay(date)]);
       }
       byActivity.set(r.activity, stat);
-    }
+    });
   }
 
   const weekSet = new Set(dates);
@@ -519,7 +573,7 @@ function activityNoun(a: Activity): string {
   }[a];
 }
 
-/** Used by the scheduled missed-task check (next milestone). */
+/** Overdue routine tasks right now (used by tests and the household view). */
 export function overdueTasks(): { pet: string; label: string; time: string }[] {
   return db.pets.flatMap((p) =>
     todaySlots(p)
@@ -531,4 +585,101 @@ export function overdueTasks(): { pet: string; label: string; time: string }[] {
 /** Test hook: insert an event at a specific time. */
 export function _insertEvent(e: Omit<CareEvent, "id">): void {
   insert("event", { ...e, id: newId("evt") });
+}
+
+// ---------------------------------------------------------------------------
+// Missed-task alerts (run every few minutes by EventBridge Scheduler)
+// ---------------------------------------------------------------------------
+
+/**
+ * Look at today's routine for every pet and raise alerts for tasks that are
+ * still not logged:
+ *   +30 min  → "household" reminder (spoken/shown to everyone at home)
+ *   +60 min  → "owner" alert (also sent by email/SMS via SNS)
+ * Each (task, level) alert is raised once, so running this every 5 minutes is safe.
+ * Tasks more than MAX_ALERT_AGE_MIN late are ignored.
+ * Returns only the alerts created by this run.
+ */
+export function checkMissedTasks(): Alert[] {
+  const { date, minutes: nowMin } = localParts(now());
+  const raised: Alert[] = [];
+  for (const pet of db.pets) {
+    for (const s of todaySlots(pet)) {
+      if (s.state === "done") continue;
+      const late = nowMin - hhmmToMinutes(s.time);
+      if (late > MAX_ALERT_AGE_MIN) continue;
+      const slot = `${s.label}@${s.time}`;
+      const levels: AlertLevel[] = [];
+      if (late >= REMIND_AFTER_MIN) levels.push("household");
+      if (late >= ESCALATE_AFTER_MIN) levels.push("owner");
+      for (const level of levels) {
+        const exists = db.alerts.some(
+          (a) => a.petId === pet.id && a.date === date && a.slot === slot && a.level === level,
+        );
+        if (exists) continue;
+        const due = minutesToSpoken(hhmmToMinutes(s.time));
+        const alert: Alert = {
+          id: newId("alert"),
+          petId: pet.id,
+          pet: pet.name,
+          level,
+          date,
+          slot,
+          label: s.label,
+          time: s.time,
+          at: now().toISOString(),
+          message:
+            level === "household"
+              ? `Reminder: ${pet.name}'s ${s.label} was due at ${due} and hasn't been logged yet.`
+              : `${pet.name} still hasn't had ${s.label}. It was due at ${due}, ${lateText(late)} ago.`,
+        };
+        insert("alert", alert);
+        raised.push(alert);
+      }
+    }
+  }
+  return raised;
+}
+
+function lateText(min: number): string {
+  if (min < 90) return `${min} minutes`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m ? `${h} hour${h > 1 ? "s" : ""} ${m} minutes` : `${h} hour${h > 1 ? "s" : ""}`;
+}
+
+/** Today's alerts, newest first, each marked resolved if the task has since been logged. */
+export function todayAlerts(): (Alert & { resolved: boolean })[] {
+  const { date } = localParts(now());
+  const doneSlots = new Set<string>();
+  for (const pet of db.pets) {
+    for (const s of todaySlots(pet)) if (s.state === "done") doneSlots.add(`${pet.id}|${s.label}@${s.time}`);
+  }
+  return db.alerts
+    .filter((a) => a.date === date)
+    .sort((a, b) => b.at.localeCompare(a.at))
+    .map((a) => ({ ...a, resolved: doneSlots.has(`${a.petId}|${a.slot}`) }));
+}
+
+/** Everything the household page needs for today, in one call. */
+export function todayView() {
+  const { date } = localParts(now());
+  const events = db.events
+    .filter((e) => localParts(new Date(e.at)).date === date)
+    .sort((a, b) => b.at.localeCompare(a.at))
+    .map((e) => ({ ...e, pet: db.pets.find((p) => p.id === e.petId)?.name ?? "?" }));
+  const notes = db.notes
+    .filter((n) => localParts(new Date(n.at)).date === date)
+    .map((n) => ({ ...n, pet: db.pets.find((p) => p.id === n.petId)?.name ?? "?" }));
+  return {
+    date,
+    pets: db.pets.map((p) => ({ name: p.name, species: p.species, slots: todaySlots(p) })),
+    events,
+    notes,
+    alerts: todayAlerts(),
+    upcomingVisits: db.visits
+      .filter((v) => v.date >= date)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((v) => ({ ...v, pet: db.pets.find((p) => p.id === v.petId)?.name ?? "?" })),
+  };
 }

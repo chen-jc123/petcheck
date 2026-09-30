@@ -61,7 +61,7 @@ async function status() {
   console.log(`Table "${TABLE_NAME}" (${REGION}): ${t.Table?.TableStatus}`);
   console.log(
     `Household "${HOUSEHOLD_ID}": ${count("pet")} pets, ${count("event")} care logs, ` +
-      `${count("note")} notes, ${count("visit")} vet visits`,
+      `${count("note")} notes, ${count("visit")} vet visits, ${count("alert")} alerts`,
   );
 }
 

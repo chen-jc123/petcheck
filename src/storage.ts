@@ -5,13 +5,25 @@
 //              store logic, then saves any new records. Stateless, so it works
 //              on AWS Lambda where each request may hit a fresh container.
 
-import { loadState, resetStore, seedDemoData, takeChanges, type Change, type CareEvent, type Note, type Pet, type VetVisit } from "./store.js";
+import {
+  loadState,
+  resetStore,
+  seedDemoData,
+  takeChanges,
+  type Alert,
+  type Change,
+  type CareEvent,
+  type Note,
+  type Pet,
+  type VetVisit,
+} from "./store.js";
 
 export interface HouseholdState {
   pets: Pet[];
   events: CareEvent[];
   notes: Note[];
   visits: VetVisit[];
+  alerts: Alert[];
 }
 
 /** What a persistent backend must provide (DynamoDB, or a fake in tests). */

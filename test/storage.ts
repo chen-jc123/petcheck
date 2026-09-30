@@ -10,13 +10,14 @@ const table: Change[] = [];
 let writes = 0;
 const fake: Backend = {
   async loadAll(): Promise<HouseholdState> {
-    const s: HouseholdState = { pets: [], events: [], notes: [], visits: [] };
+    const s: HouseholdState = { pets: [], events: [], notes: [], visits: [], alerts: [] };
     for (const c of table) {
       const copy = JSON.parse(JSON.stringify(c.item));
       if (c.kind === "pet") s.pets.push(copy);
       if (c.kind === "event") s.events.push(copy);
       if (c.kind === "note") s.notes.push(copy);
       if (c.kind === "visit") s.visits.push(copy);
+      if (c.kind === "alert") s.alerts.push(copy);
     }
     return s;
   },

@@ -63,6 +63,8 @@ Requires Node 20+.
 npm install
 npm run smoke         # logic checks, no server needed
 npm run test:storage  # persistence checks with a fake database
+npm run test:alerts   # missed-task alert logic with a simulated clock
+npm run test:lambda   # the Lambda handler with fake Function URL events
 npm run dev        # starts http://localhost:3000/mcp (with demo pets Mochi and Biscuit)
 ```
 
@@ -96,13 +98,43 @@ The server holds no state between requests, so it runs unchanged on AWS Lambda.
 Extra variables: `STORAGE=dynamodb`, `TABLE_NAME` (default `petcheck`), `HOUSEHOLD_ID` (default `demo`),
 `AWS_REGION` (default `us-east-1`).
 
+## Missed-task alerts
+
+Every 5 minutes EventBridge Scheduler runs the check. For each routine task still not logged:
+
+| How late | Alert | Who hears about it |
+|---|---|---|
+| 30 min | `household` reminder | shown on the household page (and can be spoken by Alexa) |
+| 60 min | `owner` alert | emailed to the owner via SNS |
+
+Each alert is raised once and stored in DynamoDB; logging the task marks its alerts resolved.
+Tasks more than 3 hours late are skipped (the scheduler already caught them).
+Logged tasks count toward the *nearest* scheduled slot, so a 7 PM feeding is dinner even if breakfast was missed.
+
+Demo: pretend it's a given time today and run the real check:
+
+```bash
+source .env.deploy
+curl -X POST "$URL/api/check-missed" -H "x-api-key: $API_KEY" -H "content-type: application/json" -d '{"time":"18:30"}'
+curl "$URL/api/today?time=18:30" -H "x-api-key: $API_KEY"
+```
+
+## Deploy to AWS
+
+```bash
+npm run deploy   # Lambda + Function URL + 5-minute schedule (+ SNS email if ALERT_EMAIL is in .env.deploy)
+npm run logs     # follow the Lambda logs
+```
+
 ## AWS services used
 
 | Service | How PetCheck uses it |
 |---|---|
 | **Amazon DynamoDB** | Stores pets, care logs, notes and vet visits (single table, provisioned within free tier) |
-| AWS Lambda | _next: hosts the MCP server_ |
-| Amazon EventBridge Scheduler | _next: missed-task checks_ |
+| **AWS Lambda** | Hosts the MCP server behind a public HTTPS Function URL (API-key protected), plus the household API |
+| **Amazon EventBridge Scheduler** | Invokes the Lambda every 5 minutes to check for overdue pet care tasks |
+| **Amazon SNS** | Emails the owner when a task is an hour overdue (optional, `ALERT_EMAIL`) |
+| AWS IAM | Least-privilege roles: Lambda may only touch the `petcheck` table and alert topic; the scheduler may only invoke the function |
 | Amazon Bedrock | _next: LLM for the simulated Alexa+ page_ |
 
 ## Region note

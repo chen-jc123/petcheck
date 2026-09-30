@@ -2,6 +2,7 @@
 import express from "express";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { METHOD_NOT_ALLOWED, UNAUTHORIZED, apiKeyOk, buildServer, healthInfo } from "./mcp.js";
+import { CORS_HEADERS, handleApi } from "./api.js";
 
 export { storage } from "./mcp.js";
 
@@ -38,6 +39,23 @@ app.get("/mcp", (_req, res) => {
 });
 app.delete("/mcp", (_req, res) => {
   res.status(405).json(METHOD_NOT_ALLOWED);
+});
+
+// Household page API (same handler as Lambda).
+app.use("/api", async (req, res) => {
+  res.set(CORS_HEADERS);
+  if (req.method === "OPTIONS") {
+    res.status(204).end();
+    return;
+  }
+  if (!apiKeyOk(req.header("authorization"), req.header("x-api-key"))) {
+    res.status(401).json({ error: "Missing or invalid API key." });
+    return;
+  }
+  const query: Record<string, string | undefined> = {};
+  for (const [k, v] of Object.entries(req.query)) if (typeof v === "string") query[k] = v;
+  const r = await handleApi(req.method, req.path, query, req.body);
+  res.status(r.status).json(r.body);
 });
 
 app.get("/health", (_req, res) => {

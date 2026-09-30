@@ -1,7 +1,7 @@
 // DynamoDB backend — single-table design.
 //
 //   pk = HH#<householdId>
-//   sk = PET#<id> | EVT#<isoTime>#<id> | NOTE#<isoTime>#<id> | VET#<date>#<id>
+//   sk = PET#<id> | EVT#<isoTime>#<id> | NOTE#<isoTime>#<id> | VET#<date>#<id> | ALERT#<isoTime>#<id>
 //
 // One Query loads a whole household (small, so this stays cheap), and new
 // records are written with BatchWrite. Records are only ever added, never
@@ -33,6 +33,8 @@ function sortKey(c: Change): string {
       return `NOTE#${it.at}#${it.id}`;
     case "visit":
       return `VET#${it.date}#${it.id}`;
+    case "alert":
+      return `ALERT#${it.at}#${it.id}`;
   }
 }
 
@@ -71,13 +73,14 @@ export async function batchWrite(requests: Record<string, unknown>[]): Promise<v
 export function dynamoBackend(): Backend {
   return {
     async loadAll(): Promise<HouseholdState> {
-      const state: HouseholdState = { pets: [], events: [], notes: [], visits: [] };
+      const state: HouseholdState = { pets: [], events: [], notes: [], visits: [], alerts: [] };
       for (const raw of await queryHousehold()) {
         const { pk: _pk, sk: _sk, kind, ...record } = raw as Record<string, unknown> & { kind: Kind };
         if (kind === "pet") state.pets.push(record as never);
         else if (kind === "event") state.events.push(record as never);
         else if (kind === "note") state.notes.push(record as never);
         else if (kind === "visit") state.visits.push(record as never);
+        else if (kind === "alert") state.alerts.push(record as never);
       }
       // Pets come back in sort-key order; keep the order they were added.
       state.pets.sort((a, b) => a.id.localeCompare(b.id));

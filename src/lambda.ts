@@ -1,16 +1,20 @@
-// AWS Lambda entry point (Function URL, payload format 2.0).
+// AWS Lambda entry point. Handles two kinds of events:
 //
-// Uses the MCP SDK's web-standard transport: the Lambda event becomes a
-// standard Request, the transport returns a standard Response, and that is
-// mapped back to the Lambda result. No Express or Node HTTP emulation needed.
+//   1. Function URL requests (payload format 2.0): /mcp, /api/*, /health
+//      /mcp uses the MCP SDK's web-standard transport: the Lambda event becomes a
+//      standard Request, the transport returns a standard Response, and that is
+//      mapped back to the Lambda result. No Express or Node HTTP emulation needed.
+//   2. EventBridge Scheduler: {"petcheck": "check-missed"} every 5 minutes.
 
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { METHOD_NOT_ALLOWED, UNAUTHORIZED, apiKeyOk, buildServer, healthInfo } from "./mcp.js";
+import { CORS_HEADERS, handleApi, runMissedCheck } from "./api.js";
 
 interface FunctionUrlEvent {
   rawPath: string;
   rawQueryString?: string;
   headers?: Record<string, string | undefined>;
+  queryStringParameters?: Record<string, string | undefined>;
   body?: string;
   isBase64Encoded?: boolean;
   requestContext: { domainName: string; http: { method: string } };
@@ -28,18 +32,46 @@ const json = (statusCode: number, body: unknown): LambdaResult => ({
   body: JSON.stringify(body),
 });
 
-export async function handler(event: FunctionUrlEvent): Promise<LambdaResult> {
+interface ScheduledEvent {
+  petcheck: "check-missed";
+}
+
+export async function handler(event: FunctionUrlEvent | ScheduledEvent): Promise<LambdaResult | object> {
+  if ("petcheck" in event) {
+    if (event.petcheck === "check-missed") return runMissedCheck();
+    return { error: `unknown scheduled action ${String(event.petcheck)}` };
+  }
+  return handleHttp(event);
+}
+
+async function handleHttp(event: FunctionUrlEvent): Promise<LambdaResult> {
   const method = event.requestContext.http.method.toUpperCase();
   const path = event.rawPath.replace(/\/+$/, "") || "/";
   const headers: Record<string, string> = {};
   for (const [k, v] of Object.entries(event.headers ?? {})) if (v !== undefined) headers[k.toLowerCase()] = v;
 
   if (path === "/health" && method === "GET") return json(200, healthInfo());
+
+  const body = event.body ? (event.isBase64Encoded ? Buffer.from(event.body, "base64").toString("utf8") : event.body) : "";
+
+  if (path.startsWith("/api/")) {
+    if (method === "OPTIONS") return { statusCode: 204, headers: CORS_HEADERS };
+    if (!apiKeyOk(headers["authorization"], headers["x-api-key"])) {
+      return { ...json(401, { error: "Missing or invalid API key." }), headers: { "content-type": "application/json", ...CORS_HEADERS } };
+    }
+    let parsed: unknown;
+    try {
+      parsed = body ? JSON.parse(body) : undefined;
+    } catch {
+      return json(400, { error: "Body must be JSON" });
+    }
+    const r = await handleApi(method, path.slice(4), event.queryStringParameters ?? {}, parsed);
+    return { statusCode: r.status, headers: { "content-type": "application/json", ...CORS_HEADERS }, body: JSON.stringify(r.body) };
+  }
+
   if (path !== "/mcp") return json(404, { error: "Not found. The MCP endpoint is /mcp." });
   if (!apiKeyOk(headers["authorization"], headers["x-api-key"])) return json(401, UNAUTHORIZED);
   if (method !== "POST") return json(405, METHOD_NOT_ALLOWED);
-
-  const body = event.body ? (event.isBase64Encoded ? Buffer.from(event.body, "base64").toString("utf8") : event.body) : "";
   let parsedBody: unknown;
   try {
     parsedBody = body ? JSON.parse(body) : undefined;
