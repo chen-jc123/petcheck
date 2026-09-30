@@ -3,6 +3,7 @@ import express from "express";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { METHOD_NOT_ALLOWED, UNAUTHORIZED, apiKeyOk, buildServer, healthInfo } from "./mcp.js";
 import { CORS_HEADERS, handleApi } from "./api.js";
+import { householdPage } from "./page.js";
 
 export { storage } from "./mcp.js";
 
@@ -56,6 +57,11 @@ app.use("/api", async (req, res) => {
   for (const [k, v] of Object.entries(req.query)) if (typeof v === "string") query[k] = v;
   const r = await handleApi(req.method, req.path, query, req.body);
   res.status(r.status).json(r.body);
+});
+
+// Household page.
+app.get(["/", "/household"], (_req, res) => {
+  res.type("html").set("cache-control", "no-cache").send(householdPage());
 });
 
 app.get("/health", (_req, res) => {

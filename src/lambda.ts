@@ -1,6 +1,7 @@
 // AWS Lambda entry point. Handles two kinds of events:
 //
-//   1. Function URL requests (payload format 2.0): /mcp, /api/*, /health
+//   1. Function URL requests (payload format 2.0): /mcp, /api/*, /health, and
+//      the household page at /
 //      /mcp uses the MCP SDK's web-standard transport: the Lambda event becomes a
 //      standard Request, the transport returns a standard Response, and that is
 //      mapped back to the Lambda result. No Express or Node HTTP emulation needed.
@@ -9,6 +10,7 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { METHOD_NOT_ALLOWED, UNAUTHORIZED, apiKeyOk, buildServer, healthInfo } from "./mcp.js";
 import { CORS_HEADERS, handleApi, runMissedCheck } from "./api.js";
+import { householdPage } from "./page.js";
 
 interface FunctionUrlEvent {
   rawPath: string;
@@ -51,6 +53,13 @@ async function handleHttp(event: FunctionUrlEvent): Promise<LambdaResult> {
   for (const [k, v] of Object.entries(event.headers ?? {})) if (v !== undefined) headers[k.toLowerCase()] = v;
 
   if (path === "/health" && method === "GET") return json(200, healthInfo());
+  if ((path === "/" || path === "/household") && method === "GET") {
+    return {
+      statusCode: 200,
+      headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" },
+      body: householdPage(),
+    };
+  }
 
   const body = event.body ? (event.isBase64Encoded ? Buffer.from(event.body, "base64").toString("utf8") : event.body) : "";
 

@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PetCheck · Household</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐾</text></svg>" />
+<style>
+  :root {
+    --bg: #f6f4ef; --card: #ffffff; --ink: #1f2328; --muted: #6b7078; --line: #e6e2d9;
+    --done: #1f8a4c; --done-bg: #e7f5ec; --due: #b26a00; --due-bg: #fff3dc;
+    --late: #c4312b; --late-bg: #fde8e6; --soon: #8a8f98; --soon-bg: #f1f1ef;
+    --accent: #3d5afe; --shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 16px rgba(0,0,0,.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15171a; --card: #1e2125; --ink: #eceef0; --muted: #9aa0a8; --line: #2d3137;
+      --done: #4cc27f; --done-bg: #173424; --due: #f0b24a; --due-bg: #3a2b10;
+      --late: #ff7a70; --late-bg: #3d1a18; --soon: #8a8f98; --soon-bg: #25282c;
+      --accent: #8c9eff; --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  main { max-width: 1080px; margin: 0 auto; padding: 20px 16px 48px; }
+  header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+  header h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
+  header .date { color: var(--muted); }
+  .live { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--done); box-shadow: 0 0 0 0 var(--done); animation: pulse 2s infinite; }
+  .dot.off { background: var(--late); animation: none; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(31,138,76,.5); } 70% { box-shadow: 0 0 0 8px rgba(31,138,76,0); } 100% { box-shadow: 0 0 0 0 rgba(31,138,76,0); } }
+
+  .grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 760px) {
+    .grid { grid-template-columns: 1fr; }
+    .grid > .side { order: -1; } /* on a phone, alerts and activity come first */
+  }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; box-shadow: var(--shadow); }
+  .card + .card { margin-top: 16px; }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 12px; font-weight: 600; }
+  .empty { color: var(--muted); font-size: 14px; }
+
+  .pet { display: flex; align-items: baseline; gap: 8px; margin: 2px 0 10px; }
+  .pet .name { font-size: 18px; font-weight: 650; }
+  .pet .species { color: var(--muted); font-size: 13px; }
+  .pet .count { margin-left: auto; font-size: 13px; color: var(--muted); }
+  .pets > div + div { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .slots { display: grid; gap: 8px; }
+  .slot { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--soon-bg); }
+  .slot .icon { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 14px; flex: none; background: var(--card); }
+  .slot .what { font-weight: 600; }
+  .slot .when { color: var(--muted); font-size: 13px; }
+  .slot .state { margin-left: auto; font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; text-align: right; }
+  .slot.done { background: var(--done-bg); } .slot.done .state { color: var(--done); }
+  .slot.due { background: var(--due-bg); } .slot.due .state { color: var(--due); }
+  .slot.overdue { background: var(--late-bg); } .slot.overdue .state { color: var(--late); }
+  .slot.upcoming .state { color: var(--soon); }
+  .slot .by { display: block; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--muted); font-size: 12px; }
+
+  .alert { display: flex; gap: 10px; padding: 10px 12px; border-radius: 10px; margin-bottom: 8px; border-left: 4px solid var(--due); background: var(--due-bg); }
+  .alert.owner { border-left-color: var(--late); background: var(--late-bg); }
+  .alert.resolved { opacity: .55; border-left-color: var(--done); background: var(--soon-bg); }
+  .alert .tag { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .alert .msg { font-size: 14px; }
+  .alert.resolved .msg { text-decoration: line-through; }
+
+  .feed { list-style: none; margin: 0; padding: 0; }
+  .feed li { display: flex; gap: 10px; align-items: baseline; padding: 8px 6px; border-radius: 8px; }
+  .feed li + li { border-top: 1px solid var(--line); }
+  .feed .t { color: var(--muted); font-size: 13px; min-width: 64px; font-variant-numeric: tabular-nums; }
+  .feed .new { animation: flash 2.4s ease-out; }
+  @keyframes flash { 0% { background: var(--done-bg); transform: scale(1.01); } 100% { background: transparent; transform: none; } }
+  .alert.new { animation: shake .5s; }
+  @keyframes shake { 20%, 60% { transform: translateX(-3px); } 40%, 80% { transform: translateX(3px); } }
+
+  .note { font-size: 14px; padding: 6px 0; } .note + .note { border-top: 1px solid var(--line); }
+  .note .meta { color: var(--muted); font-size: 12px; }
+
+  details.demo { margin-top: 16px; }
+  details.demo summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  .demo-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+  input, button { font: inherit; }
+  input[type=time], input[type=password] { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); }
+  button { padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: .5; cursor: default; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: var(--due-bg); color: var(--due); font-weight: 600; }
+  .status { font-size: 13px; color: var(--muted); }
+
+  #login { max-width: 420px; margin: 12vh auto; }
+  #login p { color: var(--muted); font-size: 14px; }
+  #login form { display: flex; gap: 8px; }
+  #login input { flex: 1; }
+  .error { color: var(--late); font-size: 13px; min-height: 1em; }
+  footer { margin-top: 28px; text-align: center; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <section id="login" class="card" hidden>
+    <h2>PetCheck household</h2>
+    <p>Enter the household key to see today's pet care. It's stored only in this browser.</p>
+    <form id="login-form">
+      <input id="key-input" type="password" placeholder="Household key" autocomplete="off" required />
+      <button class="primary" type="submit">Open</button>
+    </form>
+    <p class="error" id="login-error"></p>
+  </section>
+
+  <section id="app" hidden>
+    <header>
+      <h1>🐾 PetCheck</h1>
+      <span class="date" id="date"></span>
+      <span id="demo-pill" class="pill" hidden></span>
+      <span class="live"><span class="dot" id="dot"></span><span id="live-text">Live</span></span>
+    </header>
+
+    <div class="grid">
+      <div>
+        <div class="card"><h2>Today</h2><div class="pets" id="pets"></div></div>
+        <div class="card" id="notes-card" hidden><h2>Notes today</h2><div id="notes"></div></div>
+        <div class="card" id="visits-card" hidden><h2>Upcoming vet visits</h2><div id="visits"></div></div>
+      </div>
+      <div class="side">
+        <div class="card"><h2>Alerts</h2><div id="alerts"></div></div>
+        <div class="card"><h2>Activity</h2><ul class="feed" id="feed"></ul></div>
+        <details class="demo card" id="demo">
+          <summary>Demo controls</summary>
+          <div class="demo-row">
+            <label for="demo-time">Pretend it's</label>
+            <input type="time" id="demo-time" />
+            <button id="demo-apply">Show</button>
+            <button id="demo-reset">Back to now</button>
+          </div>
+          <div class="demo-row">
+            <button class="primary" id="run-check">Run missed-task check</button>
+            <span class="status" id="check-status"></span>
+          </div>
+          <div class="demo-row">
+            <button id="forget-key">Forget key on this device</button>
+          </div>
+        </details>
+      </div>
+    </div>
+    <footer>Records and reminds — never gives veterinary advice. Updates every few seconds.</footer>
+  </section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  var KEY_STORE = "petcheck.key";
+  var POLL_MS = 4000;
+  var state = { key: null, demoTime: null, seenEvents: null, seenAlerts: null, timer: null };
+
+  function $(id) { return document.getElementById(id); }
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function store(get, value) {
+    try {
+      if (get) return localStorage.getItem(KEY_STORE);
+      if (value) localStorage.setItem(KEY_STORE, value); else localStorage.removeItem(KEY_STORE);
+    } catch (e) { return null; }
+  }
+  function spokenTime(iso) {
+    return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
+  function hhmmSpoken(hhmm) {
+    var p = hhmm.split(":"), h = +p[0], m = p[1];
+    var ampm = h < 12 ? "AM" : "PM", h12 = h % 12 === 0 ? 12 : h % 12;
+    return m === "00" ? h12 + " " + ampm : h12 + ":" + m + " " + ampm;
+  }
+  var VERB = { feed: "fed", walk: "walked", meds: "gave medication to", litter: "cleaned the litter for",
+               water: "refilled water for", groom: "groomed", other: "cared for" };
+  var ICON = { feed: "🍽️", walk: "🦮", meds: "💊", litter: "🧹", water: "💧", groom: "🪮", other: "🐾" };
+  var STATE_TEXT = { done: "Done", due: "Due now", overdue: "Overdue", upcoming: "Upcoming" };
+
+  // --- API -----------------------------------------------------------------
+  function api(method, path, body) {
+    var url = "/api" + path;
+    return fetch(url, {
+      method: method,
+      headers: { "x-api-key": state.key, "content-type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+    }).then(function (r) {
+      if (r.status === 401) { var e = new Error("unauthorized"); e.unauthorized = true; throw e; }
+      return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || r.statusText); return j; });
+    });
+  }
+
+  // --- Rendering -----------------------------------------------------------
+  function render(v) {
+    var d = new Date(v.date + "T12:00:00");
+    $("date").textContent = d.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+
+    var pets = $("pets"); pets.textContent = "";
+    if (!v.pets.length) pets.appendChild(el("p", "empty", "No pets yet. Say “Alexa, add our cat Mochi.”"));
+    v.pets.forEach(function (p) {
+      var box = el("div");
+      var head = el("div", "pet");
+      head.appendChild(el("span", "name", p.name));
+      head.appendChild(el("span", "species", p.species));
+      var done = p.slots.filter(function (s) { return s.state === "done"; }).length;
+      head.appendChild(el("span", "count", done + " of " + p.slots.length + " done"));
+      box.appendChild(head);
+      var list = el("div", "slots");
+      p.slots.forEach(function (s) {
+        var row = el("div", "slot " + s.state);
+        row.appendChild(el("span", "icon", ICON[s.activity] || "🐾"));
+        var mid = el("div");
+        mid.appendChild(el("div", "what", s.label.charAt(0).toUpperCase() + s.label.slice(1)));
+        mid.appendChild(el("div", "when", hhmmSpoken(s.time)));
+        row.appendChild(mid);
+        var st = el("div", "state", STATE_TEXT[s.state]);
+        if (s.state === "done") st.appendChild(el("span", "by", s.doneBy + " · " + spokenTime(s.doneAt)));
+        row.appendChild(st);
+        list.appendChild(row);
+      });
+      box.appendChild(list);
+      pets.appendChild(box);
+    });
+
+    // Alerts: unresolved first, then resolved.
+    var alerts = $("alerts"); alerts.textContent = "";
+    var sorted = v.alerts.slice().sort(function (a, b) { return (a.resolved - b.resolved) || b.at.localeCompare(a.at); });
+    if (!sorted.length) alerts.appendChild(el("p", "empty", "No missed tasks. 🎉"));
+    var firstLoad = state.seenAlerts === null, seenA = state.seenAlerts || {};
+    sorted.forEach(function (a) {
+      var box = el("div", "alert " + a.level + (a.resolved ? " resolved" : "") + (!firstLoad && !seenA[a.id] ? " new" : ""));
+      var inner = el("div");
+      inner.appendChild(el("div", "tag", (a.resolved ? "Resolved · " : "") + (a.level === "owner" ? "Owner alert" : "Reminder") + " · " + spokenTime(a.at)));
+      inner.appendChild(el("div", "msg", a.message.replace(/^Reminder:\s*/, "")));
+      box.appendChild(inner);
+      alerts.appendChild(box);
+    });
+    state.seenAlerts = {}; v.alerts.forEach(function (a) { state.seenAlerts[a.id] = true; });
+
+    // Activity feed: newest first; flash entries that arrived since the last poll.
+    var feed = $("feed"); feed.textContent = "";
+    if (!v.events.length) feed.appendChild(el("li", "empty", "Nothing logged yet today."));
+    var firstFeed = state.seenEvents === null, seenE = state.seenEvents || {};
+    v.events.forEach(function (e) {
+      var li = el("li", !firstFeed && !seenE[e.id] ? "new" : "");
+      li.appendChild(el("span", "t", spokenTime(e.at)));
+      li.appendChild(el("span", "", e.by + " " + (VERB[e.activity] || "cared for") + " " + e.pet + (e.detail ? " (" + e.detail + ")" : "")));
+      feed.appendChild(li);
+    });
+    state.seenEvents = {}; v.events.forEach(function (e) { state.seenEvents[e.id] = true; });
+
+    var notes = $("notes"); notes.textContent = "";
+    $("notes-card").hidden = !v.notes.length;
+    v.notes.forEach(function (n) {
+      var box = el("div", "note");
+      box.appendChild(el("div", "", "“" + n.text + "” — " + n.pet));
+      box.appendChild(el("div", "meta", n.by + " · " + spokenTime(n.at)));
+      notes.appendChild(box);
+    });
+
+    var visits = $("visits"); visits.textContent = "";
+    $("visits-card").hidden = !v.upcomingVisits.length;
+    v.upcomingVisits.forEach(function (x) {
+      var day = new Date(x.date + "T12:00:00").toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+      visits.appendChild(el("div", "note", x.pet + " · " + day + (x.time ? " at " + hhmmSpoken(x.time) : "") + (x.reason ? " — " + x.reason : "")));
+    });
+  }
+
+  function setLive(ok) {
+    $("dot").className = "dot" + (ok ? "" : " off");
+    $("live-text").textContent = ok ? (state.demoTime ? "Live (demo clock)" : "Live") : "Reconnecting…";
+  }
+
+  // --- Polling -------------------------------------------------------------
+  function refresh() {
+    var q = state.demoTime ? "?time=" + encodeURIComponent(state.demoTime) : "";
+    return api("GET", "/today" + q).then(function (v) { render(v); setLive(true); })
+      .catch(function (e) {
+        if (e.unauthorized) { logout("That key didn't work."); return; }
+        setLive(false);
+      });
+  }
+  function start() {
+    $("login").hidden = true; $("app").hidden = false;
+    refresh();
+    clearInterval(state.timer);
+    state.timer = setInterval(function () { if (!document.hidden) refresh(); }, POLL_MS);
+  }
+  function logout(msg) {
+    clearInterval(state.timer); store(false, null); state.key = null;
+    state.seenEvents = null; state.seenAlerts = null;
+    $("app").hidden = true; $("login").hidden = false;
+    $("login-error").textContent = msg || "";
+  }
+
+  // --- Demo controls -------------------------------------------------------
+  function setDemo(t) {
+    state.demoTime = t || null;
+    $("demo-pill").hidden = !state.demoTime;
+    $("demo-pill").textContent = state.demoTime ? "Demo clock: " + hhmmSpoken(state.demoTime) : "";
+    refresh();
+  }
+  $("demo-apply").onclick = function () { setDemo($("demo-time").value); };
+  $("demo-reset").onclick = function () { $("demo-time").value = ""; setDemo(null); };
+  $("run-check").onclick = function () {
+    var btn = this; btn.disabled = true; $("check-status").textContent = "Checking…";
+    var body = state.demoTime ? { time: state.demoTime } : {};
+    api("POST", "/check-missed", body).then(function (r) {
+      var n = r.alerts.length;
+      $("check-status").textContent = n ? n + " new alert" + (n > 1 ? "s" : "") + (r.notified ? " · " + r.notified + " emailed" : "") : "No new alerts";
+      return refresh();
+    }).catch(function (e) { $("check-status").textContent = e.message; })
+      .then(function () { btn.disabled = false; });
+  };
+  $("forget-key").onclick = function () { logout(); };
+
+  // --- Login ---------------------------------------------------------------
+  $("login-form").onsubmit = function (ev) {
+    ev.preventDefault();
+    state.key = $("key-input").value.trim();
+    store(false, state.key);
+    $("key-input").value = "";
+    start();
+  };
+
+  // A key in the URL fragment (#key=...) is never sent to the server; save it and clean the URL.
+  var m = location.hash.match(/key=([^&]+)/);
+  if (m) { store(false, decodeURIComponent(m[1])); history.replaceState(null, "", location.pathname + location.search); }
+  var t = location.search.match(/[?&]time=(\d{1,2}:\d{2})/);
+  if (t) { $("demo-time").value = t[1].length === 4 ? "0" + t[1] : t[1]; state.demoTime = $("demo-time").value; $("demo-pill").hidden = false; $("demo-pill").textContent = "Demo clock: " + hhmmSpoken(state.demoTime); $("demo").open = true; }
+
+  state.key = store(true);
+  if (state.key) start(); else { $("login").hidden = false; }
+})();
+</script>
+</body>
+</html>

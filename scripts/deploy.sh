@@ -168,6 +168,7 @@ echo "   missed-task check: $(echo "$CHECK" | grep -o '"checkedAt":"[^"]*"' || e
 cat <<EOF
 
 ✔ PetCheck is live
+  Household page: $URL/   (enter the key from .env.deploy once)
   MCP URL:  $URL/mcp
   API:      $URL/api/today   ·   POST $URL/api/check-missed {"time":"18:30"}
   Auth:     x-api-key: <API_KEY from .env.deploy>   (or Authorization: Bearer <key>)

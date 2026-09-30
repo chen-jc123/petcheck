@@ -98,6 +98,17 @@ The server holds no state between requests, so it runs unchanged on AWS Lambda.
 Extra variables: `STORAGE=dynamodb`, `TABLE_NAME` (default `petcheck`), `HOUSEHOLD_ID` (default `demo`),
 `AWS_REGION` (default `us-east-1`).
 
+## Household page
+
+Open the Lambda URL (or `http://localhost:3000/` in dev) in any browser and enter the household key once.
+It shows each pet's routine for today (done / due / overdue), alerts, and a live activity feed that
+refreshes every few seconds, so a task logged by voice appears within moments. On a phone, alerts come first.
+
+Demo controls (bottom right): "Pretend it's 6:30 PM" and **Run missed-task check** run the real alert
+logic at a simulated time. Tip: open `<url>/?time=18:30#key=<key>` to preload both.
+
+![Owner alert email](docs/screenshots/alert-email-mochi.png)
+
 ## Missed-task alerts
 
 Every 5 minutes EventBridge Scheduler runs the check. For each routine task still not logged:

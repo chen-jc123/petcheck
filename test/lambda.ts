@@ -77,6 +77,12 @@ r = await http(event("OPTIONS", "/api/today"));
 assert.equal(r.statusCode, 204);
 console.log("✔ CORS preflight → 204");
 
+r = await http(event("GET", "/"));
+assert.equal(r.statusCode, 200);
+assert.match(r.body!, /PetCheck/);
+assert.match(r.headers!["content-type"], /text\/html/);
+console.log(`✔ GET / → household page (${r.body!.length} bytes of HTML)`);
+
 const scheduled = (await handler({ petcheck: "check-missed" })) as { checkedAt: string; alerts: unknown[] };
 assert.ok(scheduled.checkedAt);
 console.log(`✔ scheduled event: checked at ${scheduled.checkedAt}, ${scheduled.alerts.length} new alert(s)`);
