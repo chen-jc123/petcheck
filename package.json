@@ -1,0 +1,28 @@
+{
+  "name": "petcheck",
+  "version": "0.1.0",
+  "description": "PetCheck: a shared pet care log for Alexa+, built as an MCP server (Streamable HTTP).",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "build": "tsc",
+    "smoke": "tsx test/smoke.ts",
+    "inspector": "npx @modelcontextprotocol/inspector"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.24.0",
+    "express": "^5.1.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}
