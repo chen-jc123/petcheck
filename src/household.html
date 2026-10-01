@@ -7,79 +7,122 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐾</text></svg>" />
 <style>
   :root {
-    --bg: #f6f4ef; --card: #ffffff; --ink: #1f2328; --muted: #6b7078; --line: #e6e2d9;
-    --done: #1f8a4c; --done-bg: #e7f5ec; --due: #b26a00; --due-bg: #fff3dc;
-    --late: #c4312b; --late-bg: #fde8e6; --soon: #8a8f98; --soon-bg: #f1f1ef;
-    --accent: #3d5afe; --shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 16px rgba(0,0,0,.04);
+    --bg: #f4f1ea; --card: #ffffff; --ink: #1f2328; --muted: #6b7078; --line: #e8e3d8; --soft: #f6f4ef;
+    --done: #1f8a4c; --done-bg: #e5f4ea; --due: #b26a00; --due-bg: #fff2d9;
+    --late: #c4312b; --late-bg: #fde7e4; --soon: #8a8f98;
+    --accent: #3d5afe; --accent2: #2ec4f3;
+    --shadow: 0 1px 2px rgba(31,35,40,.04), 0 6px 20px rgba(31,35,40,.05);
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #15171a; --card: #1e2125; --ink: #eceef0; --muted: #9aa0a8; --line: #2d3137;
-      --done: #4cc27f; --done-bg: #173424; --due: #f0b24a; --due-bg: #3a2b10;
-      --late: #ff7a70; --late-bg: #3d1a18; --soon: #8a8f98; --soon-bg: #25282c;
-      --accent: #8c9eff; --shadow: none;
+      --bg: #131518; --card: #1c1f23; --ink: #eceef0; --muted: #9aa0a8; --line: #2b2f35; --soft: #23272c;
+      --done: #4cc27f; --done-bg: #16301f; --due: #f0b24a; --due-bg: #352812;
+      --late: #ff7a70; --late-bg: #3a1916; --soon: #8a8f98; --accent: #8c9eff; --accent2: #5fd4f7; --shadow: none;
     }
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
   body { margin: 0; background: var(--bg); color: var(--ink);
     font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-  main { max-width: 1080px; margin: 0 auto; padding: 20px 16px 48px; }
-  header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
-  header h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
+  main { max-width: 1100px; margin: 0 auto; padding: 18px 16px 40px; }
+
+  header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .logo { width: 30px; height: 30px; border-radius: 8px; flex: none; }
+  header h1 { font-size: 21px; margin: 0; letter-spacing: -.01em; }
   header .date { color: var(--muted); }
   .live { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--done); box-shadow: 0 0 0 0 var(--done); animation: pulse 2s infinite; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--done); animation: pulse 2s infinite; }
   .dot.off { background: var(--late); animation: none; }
-  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(31,138,76,.5); } 70% { box-shadow: 0 0 0 8px rgba(31,138,76,0); } 100% { box-shadow: 0 0 0 0 rgba(31,138,76,0); } }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(31,138,76,.45); } 70% { box-shadow: 0 0 0 8px rgba(31,138,76,0); } 100% { box-shadow: 0 0 0 0 rgba(31,138,76,0); } }
+  .pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; background: var(--due-bg); color: var(--due); font-weight: 650; }
 
-  .grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; align-items: start; }
+  /* Layout: two columns when wide; one column (hero → alerts → pets → activity) when narrow. */
+  .grid { display: grid; grid-template-columns: 1.35fr 1fr; gap: 14px; align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
   @media (max-width: 760px) {
-    .grid { grid-template-columns: 1fr; }
-    .grid > .side { order: -1; } /* on a phone, alerts and activity come first */
+    .grid { display: flex; flex-direction: column; align-items: stretch; }
+    .col { display: contents; }
+    #hero { order: 1; } #alerts-card { order: 2; } #pets-card { order: 3; } #activity-card { order: 4; }
+    #notes-card { order: 5; } #visits-card { order: 6; } #demo { order: 7; }
   }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; box-shadow: var(--shadow); }
-  .card + .card { margin-top: 16px; }
-  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 12px; font-weight: 600; }
-  .empty { color: var(--muted); font-size: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; box-shadow: var(--shadow); }
+  .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 0 0 10px; font-weight: 650;
+    display: flex; align-items: center; gap: 8px; }
+  .card h2 .count { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 600; }
+  .empty { color: var(--muted); font-size: 14px; margin: 2px 0; }
 
-  .pet { display: flex; align-items: baseline; gap: 8px; margin: 2px 0 10px; }
-  .pet .name { font-size: 18px; font-weight: 650; }
-  .pet .species { color: var(--muted); font-size: 13px; }
-  .pet .count { margin-left: auto; font-size: 13px; color: var(--muted); }
-  .pets > div + div { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
-  .slots { display: grid; gap: 8px; }
-  .slot { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--soon-bg); }
-  .slot .icon { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 14px; flex: none; background: var(--card); }
-  .slot .what { font-weight: 600; }
-  .slot .when { color: var(--muted); font-size: 13px; }
-  .slot .state { margin-left: auto; font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; text-align: right; }
-  .slot.done { background: var(--done-bg); } .slot.done .state { color: var(--done); }
-  .slot.due { background: var(--due-bg); } .slot.due .state { color: var(--due); }
-  .slot.overdue { background: var(--late-bg); } .slot.overdue .state { color: var(--late); }
-  .slot.upcoming .state { color: var(--soon); }
-  .slot .by { display: block; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--muted); font-size: 12px; }
+  /* Hero status */
+  #hero { display: flex; align-items: center; gap: 14px; padding: 16px; border: none; color: #fff;
+    background: linear-gradient(120deg, var(--accent), var(--accent2)); transition: background .6s; }
+  #hero.late { background: linear-gradient(120deg, #c4312b, #e8743a); }
+  #hero.due { background: linear-gradient(120deg, #c27a07, #e8a93a); }
+  #hero.ok { background: linear-gradient(120deg, #1f8a4c, #2fb27a); }
+  #hero .big { font-size: 22px; font-weight: 750; letter-spacing: -.01em; line-height: 1.2; }
+  #hero .sub { opacity: .92; font-size: 14px; margin-top: 2px; }
+  #hero .stat { margin-left: auto; text-align: right; flex: none; }
+  #hero .stat b { display: block; font-size: 26px; line-height: 1; }
+  #hero .stat span { font-size: 12px; opacity: .9; }
+  #hero .emoji { font-size: 30px; flex: none; }
 
-  .alert { display: flex; gap: 10px; padding: 10px 12px; border-radius: 10px; margin-bottom: 8px; border-left: 4px solid var(--due); background: var(--due-bg); }
+  /* Pets */
+  .pets { display: flex; flex-direction: column; gap: 14px; }
+  .pet { border: 1px solid var(--line); border-radius: 14px; padding: 12px; position: relative; background: var(--soft); overflow: hidden; }
+  .pet.complete { border-color: color-mix(in srgb, var(--done) 45%, var(--line)); }
+  .pet-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .avatar { width: 52px; height: 52px; flex: none; border-radius: 50%; }
+  .pet-name { font-size: 18px; font-weight: 700; line-height: 1.15; }
+  .pet-meta { color: var(--muted); font-size: 13px; }
+  .pet-meta .ok { color: var(--done); font-weight: 650; }
+  .pet-meta .bad { color: var(--late); font-weight: 650; }
+  .ring { margin-left: auto; flex: none; position: relative; width: 50px; height: 50px; }
+  .ring svg { transform: rotate(-90deg); }
+  .ring .track { stroke: var(--line); }
+  .ring .bar { stroke: var(--done); transition: stroke-dashoffset .8s cubic-bezier(.2,.8,.2,1); }
+  .ring .num { position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+  .slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; }
+  .slot { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 10px; background: var(--card); border: 1px solid var(--line); min-width: 0; }
+  .slot .icon { font-size: 16px; flex: none; width: 20px; text-align: center; }
+  .slot .txt { min-width: 0; }
+  .slot .what { font-weight: 600; font-size: 14px; line-height: 1.25; }
+  .slot .when { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .slot .mark { margin-left: auto; font-size: 11px; font-weight: 750; text-transform: uppercase; letter-spacing: .04em; flex: none; }
+  .slot.done { background: var(--done-bg); border-color: transparent; } .slot.done .mark { color: var(--done); }
+  .slot.due { background: var(--due-bg); border-color: transparent; } .slot.due .mark { color: var(--due); }
+  .slot.overdue { background: var(--late-bg); border-color: transparent; } .slot.overdue .mark { color: var(--late); }
+  .slot.upcoming .mark { color: var(--soon); }
+  .slot.just-done { animation: pop .7s cubic-bezier(.2,1.4,.4,1); }
+  @keyframes pop { 0% { transform: scale(.96); box-shadow: 0 0 0 0 rgba(31,138,76,.5); } 40% { transform: scale(1.04); } 100% { transform: none; box-shadow: 0 0 0 10px rgba(31,138,76,0); } }
+  .badge-done { display: inline-block; margin-left: 6px; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--done-bg); color: var(--done); font-weight: 700; }
+  .confetti { position: absolute; top: 30px; left: 50%; width: 8px; height: 12px; border-radius: 2px; pointer-events: none; animation: fall 1.4s ease-out forwards; }
+  @keyframes fall { 0% { transform: translate(0,0) rotate(0); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)); opacity: 0; } }
+
+  /* Alerts */
+  .alert { display: flex; gap: 10px; padding: 9px 11px; border-radius: 10px; margin-bottom: 7px; border-left: 4px solid var(--due); background: var(--due-bg); }
   .alert.owner { border-left-color: var(--late); background: var(--late-bg); }
-  .alert.resolved { opacity: .55; border-left-color: var(--done); background: var(--soon-bg); }
-  .alert .tag { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .alert .tag { font-size: 11px; font-weight: 750; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
   .alert .msg { font-size: 14px; }
-  .alert.resolved .msg { text-decoration: line-through; }
-
-  .feed { list-style: none; margin: 0; padding: 0; }
-  .feed li { display: flex; gap: 10px; align-items: baseline; padding: 8px 6px; border-radius: 8px; }
-  .feed li + li { border-top: 1px solid var(--line); }
-  .feed .t { color: var(--muted); font-size: 13px; min-width: 64px; font-variant-numeric: tabular-nums; }
-  .feed .new { animation: flash 2.4s ease-out; }
-  @keyframes flash { 0% { background: var(--done-bg); transform: scale(1.01); } 100% { background: transparent; transform: none; } }
   .alert.new { animation: shake .5s; }
   @keyframes shake { 20%, 60% { transform: translateX(-3px); } 40%, 80% { transform: translateX(3px); } }
+  details.resolved { margin-top: 2px; }
+  details.resolved summary { cursor: pointer; color: var(--muted); font-size: 13px; list-style: none; }
+  details.resolved summary::-webkit-details-marker { display: none; }
+  details.resolved summary::before { content: "▸ "; }
+  details.resolved[open] summary::before { content: "▾ "; }
+  details.resolved .alert { opacity: .6; border-left-color: var(--done); background: var(--soft); margin-top: 7px; }
+  details.resolved .msg { text-decoration: line-through; }
+
+  /* Activity */
+  .feed { list-style: none; margin: 0; padding: 0; }
+  .feed li { display: flex; gap: 10px; align-items: center; padding: 7px 6px; border-radius: 8px; }
+  .feed li + li { border-top: 1px solid var(--line); }
+  .feed .t { color: var(--muted); font-size: 13px; min-width: 64px; font-variant-numeric: tabular-nums; }
+  .feed .mini { width: 22px; height: 22px; border-radius: 50%; flex: none; }
+  .feed .new { animation: flash 2.4s ease-out; }
+  @keyframes flash { 0% { background: var(--done-bg); } 100% { background: transparent; } }
 
   .note { font-size: 14px; padding: 6px 0; } .note + .note { border-top: 1px solid var(--line); }
   .note .meta { color: var(--muted); font-size: 12px; }
 
-  details.demo { margin-top: 16px; }
   details.demo summary { cursor: pointer; color: var(--muted); font-size: 13px; }
   .demo-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
   input, button { font: inherit; }
@@ -87,7 +130,6 @@
   button { padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
   button:disabled { opacity: .5; cursor: default; }
-  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: var(--due-bg); color: var(--due); font-weight: 600; }
   .status { font-size: 13px; color: var(--muted); }
 
   #login { max-width: 420px; margin: 12vh auto; }
@@ -95,7 +137,8 @@
   #login form { display: flex; gap: 8px; }
   #login input { flex: 1; }
   .error { color: var(--late); font-size: 13px; min-height: 1em; }
-  footer { margin-top: 28px; text-align: center; color: var(--muted); font-size: 12px; }
+  footer { margin-top: 22px; text-align: center; color: var(--muted); font-size: 12px; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
@@ -112,21 +155,23 @@
 
   <section id="app" hidden>
     <header>
-      <h1>🐾 PetCheck</h1>
+      <svg class="logo" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3d5afe"/><stop offset="1" stop-color="#2ec4f3"/></linearGradient></defs><rect width="512" height="512" rx="112" fill="url(#lg)"/><g fill="#fff"><ellipse cx="146" cy="214" rx="42" ry="54" transform="rotate(-18 146 214)"/><ellipse cx="216" cy="140" rx="44" ry="58" transform="rotate(-6 216 140)"/><ellipse cx="304" cy="140" rx="44" ry="58" transform="rotate(6 304 140)"/><ellipse cx="374" cy="214" rx="42" ry="54" transform="rotate(18 374 214)"/><path d="M260 236c-62 0-128 66-128 128 0 42 32 64 68 64 26 0 40-14 60-14s34 14 60 14c36 0 68-22 68-64 0-62-66-128-128-128z"/></g><circle cx="392" cy="392" r="86" fill="#1f8a4c" stroke="#fff" stroke-width="18"/><path d="M350 394l30 30 56-62" fill="none" stroke="#fff" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <h1>PetCheck</h1>
       <span class="date" id="date"></span>
       <span id="demo-pill" class="pill" hidden></span>
       <span class="live"><span class="dot" id="dot"></span><span id="live-text">Live</span></span>
     </header>
 
     <div class="grid">
-      <div>
-        <div class="card"><h2>Today</h2><div class="pets" id="pets"></div></div>
+      <div class="col">
+        <div class="card" id="hero"><span class="emoji" id="hero-emoji">🐾</span><div><div class="big" id="hero-big">Loading…</div><div class="sub" id="hero-sub"></div></div><div class="stat"><b id="hero-done">–</b><span>done today</span></div></div>
+        <div class="card" id="pets-card"><h2>Today</h2><div class="pets" id="pets"></div></div>
         <div class="card" id="notes-card" hidden><h2>Notes today</h2><div id="notes"></div></div>
         <div class="card" id="visits-card" hidden><h2>Upcoming vet visits</h2><div id="visits"></div></div>
       </div>
-      <div class="side">
-        <div class="card"><h2>Alerts</h2><div id="alerts"></div></div>
-        <div class="card"><h2>Activity</h2><ul class="feed" id="feed"></ul></div>
+      <div class="col">
+        <div class="card" id="alerts-card"><h2>Alerts <span class="count" id="alerts-count"></span></h2><div id="alerts"></div></div>
+        <div class="card" id="activity-card"><h2>Activity</h2><ul class="feed" id="feed"></ul></div>
         <details class="demo card" id="demo">
           <summary>Demo controls</summary>
           <div class="demo-row">
@@ -155,7 +200,7 @@
   var KEY_STORE = "petcheck.key";
   var LOCALE = "en-US"; // PetCheck speaks English; keep dates/times consistent with Alexa's replies
   var POLL_MS = 4000;
-  var state = { key: null, demoTime: null, seenEvents: null, seenAlerts: null, timer: null };
+  var state = { key: null, demoTime: null, seenEvents: null, seenAlerts: null, slotStates: null, complete: {}, timer: null };
 
   function $(id) { return document.getElementById(id); }
   function el(tag, cls, text) {
@@ -170,23 +215,90 @@
       if (value) localStorage.setItem(KEY_STORE, value); else localStorage.removeItem(KEY_STORE);
     } catch (e) { return null; }
   }
-  function spokenTime(iso) {
-    return new Date(iso).toLocaleTimeString(LOCALE, { hour: "numeric", minute: "2-digit" });
-  }
+  function spokenTime(iso) { return new Date(iso).toLocaleTimeString(LOCALE, { hour: "numeric", minute: "2-digit" }); }
   function hhmmSpoken(hhmm) {
     var p = hhmm.split(":"), h = +p[0], m = p[1];
     var ampm = h < 12 ? "AM" : "PM", h12 = h % 12 === 0 ? 12 : h % 12;
     return m === "00" ? h12 + " " + ampm : h12 + ":" + m + " " + ampm;
   }
+  function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
   var VERB = { feed: "fed", walk: "walked", meds: "gave medication to", litter: "cleaned the litter for",
                water: "refilled water for", groom: "groomed", other: "cared for" };
   var ICON = { feed: "🍽️", walk: "🦮", meds: "💊", litter: "🧹", water: "💧", groom: "🪮", other: "🐾" };
-  var STATE_TEXT = { done: "Done", due: "Due now", overdue: "Overdue", upcoming: "Upcoming" };
+  var MARK = { done: "Done", due: "Due now", overdue: "Overdue", upcoming: "Later" };
+
+  // --- Original pet avatars (inline SVG) --------------------------------------
+  // [fur, background] per species, so a dog never comes out pink.
+  var COLORS = {
+    cat: [["#f2a65a", "#fde8d2"], ["#9aa3ad", "#e6eaee"], ["#8d6e63", "#efe5df"], ["#e8c79a", "#f8eedd"]],
+    dog: [["#d9a05b", "#f8ead6"], ["#a1887f", "#ede4df"], ["#c78b4f", "#f6e6d4"], ["#e6d3b3", "#f4ede1"]],
+    other: [["#7e8ce0", "#e3e7fb"], ["#5fb59a", "#dbf1e9"]],
+  };
+  function hash(s) { var h = 0; for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
+  function avatarSvg(name, species, size) {
+    var kind = /cat|kitt/i.test(species) ? "cat" : /dog|pup/i.test(species) ? "dog" : "other";
+    var c = COLORS[kind][hash(name) % COLORS[kind].length], fur = c[0], bg = c[1];
+    var face;
+    if (/cat|kitt/i.test(species)) {
+      face =
+        '<path d="M26 40 L30 16 L44 32 Z" fill="' + fur + '"/><path d="M74 40 L70 16 L56 32 Z" fill="' + fur + '"/>' +
+        '<path d="M29 36 L31 22 L40 32 Z" fill="#f6b8c4"/><path d="M71 36 L69 22 L60 32 Z" fill="#f6b8c4"/>' +
+        '<ellipse cx="50" cy="56" rx="28" ry="25" fill="' + fur + '"/>' +
+        '<ellipse cx="40" cy="53" rx="3.6" ry="4.6" fill="#2b2b2b"/><ellipse cx="60" cy="53" rx="3.6" ry="4.6" fill="#2b2b2b"/>' +
+        '<path d="M47 62 h6 l-3 3.5 z" fill="#e0798f"/>' +
+        '<path d="M50 65.5 q-3 4 -7 2 M50 65.5 q3 4 7 2" stroke="#2b2b2b" stroke-width="1.6" fill="none" stroke-linecap="round"/>' +
+        '<path d="M30 60 h-12 M30 64 l-11 3 M70 60 h12 M70 64 l11 3" stroke="#2b2b2b" stroke-width="1.2" stroke-linecap="round" opacity=".55"/>';
+    } else if (/dog|pup/i.test(species)) {
+      face =
+        '<ellipse cx="26" cy="46" rx="10" ry="19" fill="#5d4037" transform="rotate(18 26 46)"/>' +
+        '<ellipse cx="74" cy="46" rx="10" ry="19" fill="#5d4037" transform="rotate(-18 74 46)"/>' +
+        '<ellipse cx="50" cy="54" rx="26" ry="26" fill="' + fur + '"/>' +
+        '<ellipse cx="50" cy="66" rx="14" ry="11" fill="#f5e6d8"/>' +
+        '<circle cx="40" cy="50" r="3.8" fill="#2b2b2b"/><circle cx="60" cy="50" r="3.8" fill="#2b2b2b"/>' +
+        '<ellipse cx="50" cy="61" rx="5.5" ry="4" fill="#2b2b2b"/>' +
+        '<path d="M50 65 v4 M50 69 q-4 3 -7 0 M50 69 q4 3 7 0" stroke="#2b2b2b" stroke-width="1.6" fill="none" stroke-linecap="round"/>' +
+        '<path d="M47 71 q3 7 6 0 z" fill="#e57373"/>';
+    } else {
+      face =
+        '<g fill="' + fur + '"><ellipse cx="34" cy="42" rx="6" ry="8"/><ellipse cx="45" cy="33" rx="6" ry="8"/><ellipse cx="57" cy="33" rx="6" ry="8"/><ellipse cx="67" cy="42" rx="6" ry="8"/>' +
+        '<path d="M50 46 c-10 0 -20 10 -20 20 c0 7 5 10 11 10 c4 0 6 -2 9 -2 s5 2 9 2 c6 0 11 -3 11 -10 c0 -10 -10 -20 -20 -20z"/></g>';
+    }
+    return '<svg viewBox="0 0 100 100" width="' + size + '" height="' + size + '" aria-hidden="true">' +
+      '<circle cx="50" cy="50" r="50" fill="' + bg + '"/>' + face + '</svg>';
+  }
+  var speciesByPet = {};
+  function avatarEl(name, species, size, cls) {
+    var span = el("span", cls);
+    span.innerHTML = avatarSvg(name, species || speciesByPet[name] || "", size);
+    return span.firstChild;
+  }
+
+  function ringEl(done, total) {
+    var r = 21, c = 2 * Math.PI * r, frac = total ? done / total : 0;
+    var wrap = el("div", "ring");
+    wrap.innerHTML = '<svg width="50" height="50" viewBox="0 0 50 50"><circle class="track" cx="25" cy="25" r="' + r + '" fill="none" stroke-width="5"/>' +
+      '<circle class="bar" cx="25" cy="25" r="' + r + '" fill="none" stroke-width="5" stroke-linecap="round" stroke-dasharray="' + c + '" stroke-dashoffset="' + c * (1 - frac) + '"/></svg>';
+    wrap.appendChild(el("span", "num", done + "/" + total));
+    return wrap;
+  }
+
+  function confetti(card) {
+    var colors = ["#3d5afe", "#2ec4f3", "#1f8a4c", "#f0b24a", "#e57f9a"];
+    for (var i = 0; i < 26; i++) {
+      var p = el("span", "confetti");
+      p.style.background = colors[i % colors.length];
+      p.style.setProperty("--dx", (Math.random() * 260 - 130) + "px");
+      p.style.setProperty("--dy", (Math.random() * 160 + 40) + "px");
+      p.style.setProperty("--rot", (Math.random() * 720 - 360) + "deg");
+      p.style.animationDelay = (Math.random() * 0.15) + "s";
+      card.appendChild(p);
+      setTimeout(function (n) { return function () { n.remove(); }; }(p), 1800);
+    }
+  }
 
   // --- API -----------------------------------------------------------------
   function api(method, path, body) {
-    var url = "/api" + path;
-    return fetch(url, {
+    return fetch("/api" + path, {
       method: method,
       headers: { "x-api-key": state.key, "content-type": "application/json" },
       body: body ? JSON.stringify(body) : undefined,
@@ -197,59 +309,119 @@
   }
 
   // --- Rendering -----------------------------------------------------------
+  function renderHero(v) {
+    var all = [], done = 0;
+    v.pets.forEach(function (p) { p.slots.forEach(function (s) { all.push({ pet: p.name, s: s }); if (s.state === "done") done++; }); });
+    var overdue = all.filter(function (x) { return x.s.state === "overdue"; });
+    var due = all.filter(function (x) { return x.s.state === "due"; });
+    var upcoming = all.filter(function (x) { return x.s.state === "upcoming"; }).sort(function (a, b) { return a.s.time.localeCompare(b.s.time); });
+    var hero = $("hero"), big, sub, emoji, cls;
+    var list = function (xs) {
+      var names = xs.slice(0, 3).map(function (x) { return x.pet + "'s " + x.s.label; });
+      return names.join(", ") + (xs.length > 3 ? " and " + (xs.length - 3) + " more" : "");
+    };
+    var next = upcoming[0] ? "Next up: " + upcoming[0].pet + "'s " + upcoming[0].s.label + " at " + hhmmSpoken(upcoming[0].s.time) : "";
+    if (!all.length) { big = "No routines yet"; sub = "Say “Alexa, add our cat Mochi.”"; emoji = "🐾"; cls = ""; }
+    else if (overdue.length) { big = overdue.length + (overdue.length === 1 ? " task overdue" : " tasks overdue"); sub = list(overdue); emoji = "⏰"; cls = "late"; }
+    else if (due.length) { big = due.length + (due.length === 1 ? " task due now" : " tasks due now"); sub = list(due); emoji = "🔔"; cls = "due"; }
+    else if (!upcoming.length) { big = "Everything's done for today"; sub = "Every pet is fed, walked and cared for."; emoji = "🎉"; cls = "ok"; }
+    else { big = "All caught up"; sub = next; emoji = "✅"; cls = "ok"; }
+    hero.className = "card " + cls;
+    $("hero-big").textContent = big;
+    $("hero-sub").textContent = (cls === "late" || cls === "due") && next ? sub + " · " + next : sub;
+    $("hero-emoji").textContent = emoji;
+    $("hero-done").textContent = done + "/" + all.length;
+  }
+
   function render(v) {
     var d = new Date(v.date + "T12:00:00");
     $("date").textContent = d.toLocaleDateString(LOCALE, { weekday: "long", month: "long", day: "numeric" });
+    v.pets.forEach(function (p) { speciesByPet[p.name] = p.species; });
+    renderHero(v);
 
+    // Pets
+    var prevSlots = state.slotStates, nextSlots = {};
     var pets = $("pets"); pets.textContent = "";
     if (!v.pets.length) pets.appendChild(el("p", "empty", "No pets yet. Say “Alexa, add our cat Mochi.”"));
     v.pets.forEach(function (p) {
-      var box = el("div");
-      var head = el("div", "pet");
-      head.appendChild(el("span", "name", p.name));
-      head.appendChild(el("span", "species", p.species));
       var done = p.slots.filter(function (s) { return s.state === "done"; }).length;
-      head.appendChild(el("span", "count", done + " of " + p.slots.length + " done"));
-      box.appendChild(head);
+      var late = p.slots.filter(function (s) { return s.state === "overdue"; }).length;
+      var isComplete = p.slots.length > 0 && done === p.slots.length;
+      var card = el("div", "pet" + (isComplete ? " complete" : ""));
+      var head = el("div", "pet-head");
+      head.appendChild(avatarEl(p.name, p.species, 52, "avatar"));
+      var who = el("div");
+      var nm = el("div", "pet-name", p.name);
+      if (isComplete) nm.appendChild(el("span", "badge-done", "All done today"));
+      who.appendChild(nm);
+      var meta = el("div", "pet-meta");
+      meta.appendChild(document.createTextNode(cap(p.species) + (isComplete ? "" : " · ")));
+      if (isComplete) { /* the "All done today" badge says it */ }
+      else if (late) meta.appendChild(el("span", "bad", late + " overdue"));
+      else {
+        var nextSlot = p.slots.filter(function (s) { return s.state !== "done"; })[0];
+        if (nextSlot) meta.appendChild(document.createTextNode("next: " + nextSlot.label + " " + hhmmSpoken(nextSlot.time)));
+        else meta.appendChild(el("span", "ok", "nothing left today"));
+      }
+      who.appendChild(meta);
+      head.appendChild(who);
+      head.appendChild(ringEl(done, p.slots.length));
+      card.appendChild(head);
+
       var list = el("div", "slots");
       p.slots.forEach(function (s) {
-        var row = el("div", "slot " + s.state);
+        var key = p.name + "|" + s.label + "|" + s.time;
+        nextSlots[key] = s.state;
+        var justDone = prevSlots && s.state === "done" && prevSlots[key] && prevSlots[key] !== "done";
+        var row = el("div", "slot " + s.state + (justDone ? " just-done" : ""));
+        row.title = cap(s.label) + " · " + hhmmSpoken(s.time) + (s.state === "done" ? " · " + s.doneBy + " at " + spokenTime(s.doneAt) : "");
         row.appendChild(el("span", "icon", ICON[s.activity] || "🐾"));
-        var mid = el("div");
-        mid.appendChild(el("div", "what", s.label.charAt(0).toUpperCase() + s.label.slice(1)));
-        mid.appendChild(el("div", "when", hhmmSpoken(s.time)));
-        row.appendChild(mid);
-        var st = el("div", "state", STATE_TEXT[s.state]);
-        if (s.state === "done") st.appendChild(el("span", "by", s.doneBy + " · " + spokenTime(s.doneAt)));
-        row.appendChild(st);
+        var txt = el("div", "txt");
+        txt.appendChild(el("div", "what", cap(s.label)));
+        txt.appendChild(el("div", "when", s.state === "done" ? s.doneBy + " · " + spokenTime(s.doneAt) : hhmmSpoken(s.time)));
+        row.appendChild(txt);
+        row.appendChild(el("span", "mark", s.state === "done" ? "✓" : MARK[s.state]));
         list.appendChild(row);
       });
-      box.appendChild(list);
-      pets.appendChild(box);
+      card.appendChild(list);
+      pets.appendChild(card);
+      if (isComplete && prevSlots && !state.complete[p.name]) setTimeout(function () { confetti(card); }, 50);
+      state.complete[p.name] = isComplete;
     });
+    state.slotStates = nextSlots;
 
-    // Alerts: unresolved first, then resolved.
+    // Alerts: open ones first (newest first); resolved collapsed.
     var alerts = $("alerts"); alerts.textContent = "";
-    var sorted = v.alerts.slice().sort(function (a, b) { return (a.resolved - b.resolved) || b.at.localeCompare(a.at); });
-    if (!sorted.length) alerts.appendChild(el("p", "empty", "No alerts right now."));
+    var open = v.alerts.filter(function (a) { return !a.resolved; }).sort(function (a, b) { return (a.level === "owner" ? 0 : 1) - (b.level === "owner" ? 0 : 1) || b.at.localeCompare(a.at); });
+    var resolved = v.alerts.filter(function (a) { return a.resolved; });
+    $("alerts-count").textContent = open.length ? open.length + " open" : "";
     var firstLoad = state.seenAlerts === null, seenA = state.seenAlerts || {};
-    sorted.forEach(function (a) {
-      var box = el("div", "alert " + a.level + (a.resolved ? " resolved" : "") + (!firstLoad && !seenA[a.id] ? " new" : ""));
+    function alertEl(a) {
+      var box = el("div", "alert " + a.level + (!firstLoad && !seenA[a.id] ? " new" : ""));
       var inner = el("div");
-      inner.appendChild(el("div", "tag", (a.resolved ? "Resolved · " : "") + (a.level === "owner" ? "Owner alert" : "Reminder") + " · " + spokenTime(a.at)));
+      inner.appendChild(el("div", "tag", (a.level === "owner" ? "Owner alert" : "Reminder") + " · " + spokenTime(a.at)));
       inner.appendChild(el("div", "msg", a.message.replace(/^Reminder:\s*/, "")));
       box.appendChild(inner);
-      alerts.appendChild(box);
-    });
+      return box;
+    }
+    if (!open.length) alerts.appendChild(el("p", "empty", "No open alerts."));
+    open.forEach(function (a) { alerts.appendChild(alertEl(a)); });
+    if (resolved.length) {
+      var det = el("details", "resolved");
+      det.appendChild(el("summary", null, resolved.length + " resolved"));
+      resolved.forEach(function (a) { det.appendChild(alertEl(a)); });
+      alerts.appendChild(det);
+    }
     state.seenAlerts = {}; v.alerts.forEach(function (a) { state.seenAlerts[a.id] = true; });
 
-    // Activity feed: newest first; flash entries that arrived since the last poll.
+    // Activity feed
     var feed = $("feed"); feed.textContent = "";
     if (!v.events.length) feed.appendChild(el("li", "empty", "Nothing logged yet today."));
     var firstFeed = state.seenEvents === null, seenE = state.seenEvents || {};
     v.events.forEach(function (e) {
       var li = el("li", !firstFeed && !seenE[e.id] ? "new" : "");
       li.appendChild(el("span", "t", spokenTime(e.at)));
+      li.appendChild(avatarEl(e.pet, null, 22, "mini"));
       li.appendChild(el("span", "", e.by + " " + (VERB[e.activity] || "cared for") + " " + e.pet + (e.detail ? " (" + e.detail + ")" : "")));
       feed.appendChild(li);
     });
@@ -294,7 +466,7 @@
   }
   function logout(msg) {
     clearInterval(state.timer); store(false, null); state.key = null;
-    state.seenEvents = null; state.seenAlerts = null;
+    state.seenEvents = null; state.seenAlerts = null; state.slotStates = null; state.complete = {};
     $("app").hidden = true; $("login").hidden = false;
     $("login-error").textContent = msg || "";
   }
