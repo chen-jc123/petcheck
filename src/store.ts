@@ -235,7 +235,8 @@ export function findPet(name?: string): Pet {
     if (db.pets.length === 0) throw new PetCheckError("No pets have been added yet. Try: add our cat Mochi.");
     throw new PetCheckError(`Which pet? You have ${joinNames(db.pets.map((p) => p.name))}.`);
   }
-  const pet = db.pets.find((p) => p.name.toLowerCase() === name.trim().toLowerCase());
+  const pet =
+    db.pets.find((p) => p.name.toLowerCase() === name.trim().toLowerCase()) ?? bySpecies(name.trim()) ?? fuzzyPet(name.trim());
   if (!pet) {
     const known = db.pets.length ? ` I know ${joinNames(db.pets.map((p) => p.name))}.` : "";
     throw new PetCheckError(`I don't know a pet called ${name}.${known}`);
@@ -248,6 +249,48 @@ function personName(raw?: string): string {
   const t = raw?.trim();
   if (!t) return "Someone";
   return t.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
+}
+
+/** "the cat" → the household's only cat (if there is exactly one). */
+function bySpecies(word: string): Pet | undefined {
+  const w = word.toLowerCase().replace(/^the\s+/, "");
+  const species = /^(cat|kitty|kitten)s?$/.test(w) ? "cat" : /^(dog|puppy|pup)s?$/.test(w) ? "dog" : w;
+  const matches = db.pets.filter((p) => p.species === species);
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+/**
+ * Voice input mangles names ("mocha", "Mochie", "biscuits"). Accept a unique pet whose
+ * name is within a small edit distance, or that the spoken word starts with.
+ */
+function fuzzyPet(spoken: string): Pet | undefined {
+  const s = spoken.toLowerCase().replace(/[^a-z]/g, "");
+  if (s.length < 3) return undefined;
+  const scored = db.pets
+    .map((p) => {
+      const n = p.name.toLowerCase();
+      const d = n.startsWith(s) || s.startsWith(n) ? 0 : editDistance(s, n);
+      return { p, d };
+    })
+    .filter((x) => x.d <= (x.p.name.length >= 5 ? 2 : 1))
+    .sort((a, b) => a.d - b.d);
+  if (scored.length === 0) return undefined;
+  if (scored.length > 1 && scored[0].d === scored[1].d) return undefined; // ambiguous
+  return scored[0].p;
+}
+
+function editDistance(a: string, b: string): number {
+  const row = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = row[0];
+    row[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = row[j];
+      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = tmp;
+    }
+  }
+  return row[b.length];
 }
 
 function joinNames(names: string[]): string {
@@ -367,26 +410,28 @@ export interface SlotStatus {
  * activity in time order: the first feed of the day satisfies breakfast, the
  * second satisfies dinner, and so on.
  */
+/** A task logged up to this long before its scheduled time counts as on time ("fed at 5:30 for 6 PM dinner"). */
+const EARLY_WINDOW_MIN = 60;
+
 /**
  * Match a day's logged events to routine slots. Each event (in time order) fills the
- * *nearest* open slot of the same activity, so a 7 PM feeding counts as dinner even
- * if breakfast was missed. Returns the matched event (or undefined) per routine item.
+ * nearest open slot of the same activity that is already due (or due within the next
+ * hour), so a 2:48 PM feeding is a late breakfast if breakfast was missed, and a 7 PM
+ * feeding is dinner. Only if nothing earlier is open does it count toward a later slot.
+ * Returns the matched event (or undefined) per routine item.
  */
 function matchEvents(routine: RoutineItem[], events: CareEvent[]): (CareEvent | undefined)[] {
   const matched: (CareEvent | undefined)[] = routine.map(() => undefined);
   for (const e of [...events].sort((a, b) => a.at.localeCompare(b.at))) {
     const eMin = localParts(new Date(e.at)).minutes;
-    let best = -1;
-    let bestDist = Infinity;
-    routine.forEach((r, i) => {
-      if (r.activity !== e.activity || matched[i]) return;
-      const dist = Math.abs(hhmmToMinutes(r.time) - eMin);
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = i;
-      }
-    });
-    if (best >= 0) matched[best] = e;
+    const open = routine
+      .map((r, i) => ({ i, slotMin: hhmmToMinutes(r.time), r }))
+      .filter(({ r, i }) => r.activity === e.activity && !matched[i]);
+    if (open.length === 0) continue;
+    const dueByNow = open.filter((o) => o.slotMin <= eMin + EARLY_WINDOW_MIN);
+    const pool = dueByNow.length ? dueByNow : open;
+    pool.sort((a, b) => Math.abs(a.slotMin - eMin) - Math.abs(b.slotMin - eMin));
+    matched[pool[0].i] = e;
   }
   return matched;
 }

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PetCheck · Demo</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐾</text></svg>" />
+<style>
+  html, body { margin: 0; height: 100%; background: #0f1419; font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .bar { height: 34px; display: flex; align-items: center; gap: 16px; padding: 0 14px; color: #8b98a5; border-bottom: 1px solid #26333f; }
+  .bar b { color: #e8edf2; }
+  .split { display: grid; grid-template-columns: 1fr 1fr; height: calc(100% - 35px); }
+  iframe { width: 100%; height: 100%; border: 0; }
+  .left { border-right: 1px solid #26333f; }
+  .right { background: #f6f4ef; }
+  .label { margin-left: auto; }
+</style>
+</head>
+<body>
+  <div class="bar"><b>🐾 PetCheck demo</b><span>Left: a family member talking to Alexa+ · Right: the owner's household view (live)</span></div>
+  <div class="split">
+    <iframe class="left" src="/alexa?compact=1" allow="microphone; autoplay" title="Simulated Alexa+"></iframe>
+    <iframe class="right" src="/" title="Household page"></iframe>
+  </div>
+  <script>
+    // Pass a #key=... fragment on to both frames' shared storage, then clean the URL.
+    var m = location.hash.match(/key=([^&]+)/);
+    if (m) { try { localStorage.setItem("petcheck.key", decodeURIComponent(m[1])); } catch (e) {} history.replaceState(null, "", location.pathname); }
+  </script>
+</body>
+</html>

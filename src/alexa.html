@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PetCheck · Simulated Alexa+</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐾</text></svg>" />
+<style>
+  :root {
+    --bg: #0f1419; --panel: #172029; --panel2: #1d2833; --ink: #e8edf2; --muted: #8b98a5; --line: #26333f;
+    --ring: #2ec4f3; --ring2: #6a5cff; --ok: #3ccf8e; --warn: #f0b24a; --err: #ff6b62; --accent: #2ec4f3;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 18px 16px 32px; }
+  header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  header h1 { font-size: 18px; margin: 0; }
+  header .sub { color: var(--muted); font-size: 13px; }
+  header a { margin-left: auto; color: var(--muted); font-size: 13px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+  body.compact .grid { grid-template-columns: 1fr; gap: 10px; }
+  /* Split-screen demo: keep the conversation and the MCP log on screen together. */
+  body.compact main { padding: 10px 12px 16px; }
+  body.compact header { margin-bottom: 8px; }
+  body.compact .device { padding: 10px 8px 6px; gap: 8px; }
+  body.compact .orb { width: 92px; height: 92px; }
+  body.compact .orb .glyph { font-size: 28px; }
+  body.compact .suggest, body.compact footer, body.compact .interim:empty { display: none; }
+  body.compact .mic { width: 52px; height: 52px; font-size: 22px; }
+  body.compact .convo { max-height: 150px; }
+  body.compact .log { max-height: 46vh; }
+  @media (max-width: 820px) { .grid { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+  .panel h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; font-weight: 600; }
+
+  /* Device */
+  .device { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 22px 16px 18px; }
+  .orb { width: 168px; height: 168px; border-radius: 50%; position: relative; display: grid; place-items: center;
+    background: radial-gradient(circle at 50% 45%, #1e2a35 0 55%, #121a21 56% 100%); box-shadow: inset 0 2px 8px rgba(0,0,0,.6); }
+  .orb::before { content: ""; position: absolute; inset: -6px; border-radius: 50%; padding: 6px;
+    background: conic-gradient(var(--line), var(--line)); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude; transition: background .3s; }
+  .orb .glyph { font-size: 44px; opacity: .85; }
+  .orb.listening::before { background: conic-gradient(var(--ring), var(--ring)); animation: breathe 1.2s ease-in-out infinite; }
+  .orb.thinking::before { background: conic-gradient(from 0deg, var(--ring2), var(--ring), transparent 60%, var(--ring2)); animation: spin 1s linear infinite; }
+  .orb.speaking::before { background: conic-gradient(var(--ring), var(--ring2), var(--ring)); animation: breathe .6s ease-in-out infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes breathe { 50% { filter: brightness(1.6); transform: scale(1.03); } }
+  .status { color: var(--muted); font-size: 14px; min-height: 20px; text-align: center; }
+  .interim { color: var(--ink); font-size: 16px; min-height: 22px; text-align: center; font-style: italic; opacity: .8; }
+
+  .speakers { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .chip { border: 1px solid var(--line); background: var(--panel2); color: var(--ink); padding: 6px 12px; border-radius: 999px; cursor: pointer; font: inherit; font-size: 14px; }
+  .chip.on { border-color: var(--accent); background: rgba(46,196,243,.15); color: #fff; }
+  .mic { width: 64px; height: 64px; border-radius: 50%; border: none; cursor: pointer; font-size: 26px;
+    background: var(--accent); color: #04121a; box-shadow: 0 6px 20px rgba(46,196,243,.35); }
+  .mic.live { background: var(--err); box-shadow: 0 6px 20px rgba(255,107,98,.4); }
+  .mic:disabled { opacity: .4; cursor: default; }
+  form.say { display: flex; gap: 8px; width: 100%; }
+  form.say input { flex: 1; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel2); color: var(--ink); font: inherit; }
+  form.say button, .btn { padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel2); color: var(--ink); font: inherit; cursor: pointer; }
+  .suggest { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .suggest .chip { font-size: 13px; padding: 5px 10px; color: var(--muted); }
+  .opts { display: flex; gap: 14px; color: var(--muted); font-size: 13px; }
+
+  /* Conversation */
+  .convo { display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto; margin-top: 6px; }
+  .bubble { max-width: 85%; padding: 9px 12px; border-radius: 14px; font-size: 15px; }
+  .bubble .who { display: block; font-size: 11px; color: var(--muted); margin-bottom: 2px; text-transform: uppercase; letter-spacing: .05em; }
+  .bubble.user { align-self: flex-end; background: #24425a; border-bottom-right-radius: 4px; }
+  .bubble.alexa { align-self: flex-start; background: var(--panel2); border-bottom-left-radius: 4px; }
+  .bubble.err { background: rgba(255,107,98,.15); color: #ffd1cd; }
+
+  /* MCP log */
+  .log { display: flex; flex-direction: column; gap: 6px; max-height: 620px; overflow-y: auto; }
+  .turn { border-top: 1px dashed var(--line); padding-top: 8px; margin-top: 4px; font-size: 12px; color: var(--muted); }
+  .turn:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
+  details.call { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; }
+  details.call summary { list-style: none; cursor: pointer; padding: 8px 10px; display: flex; gap: 8px; align-items: center;
+    font: 12.5px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  details.call summary::-webkit-details-marker { display: none; }
+  .verb { color: var(--accent); font-weight: 700; }
+  .m { color: var(--ink); }
+  .tool { color: var(--warn); }
+  .code { margin-left: auto; padding: 1px 6px; border-radius: 6px; background: rgba(60,207,142,.15); color: var(--ok); }
+  .code.bad { background: rgba(255,107,98,.15); color: var(--err); }
+  .ms { color: var(--muted); min-width: 52px; text-align: right; }
+  pre { margin: 0; padding: 8px 10px 10px; border-top: 1px solid var(--line); font: 11.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    white-space: pre-wrap; word-break: break-word; color: #cbd5df; max-height: 260px; overflow: auto; }
+  pre b { color: var(--muted); font-weight: 600; }
+  .model { font: 12px ui-monospace, Menlo, monospace; color: var(--muted); padding: 2px 2px 0; }
+  .empty { color: var(--muted); font-size: 14px; }
+
+  #login { max-width: 420px; margin: 12vh auto; }
+  #login form { display: flex; gap: 8px; }
+  #login input { flex: 1; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel2); color: var(--ink); font: inherit; }
+  .error { color: var(--err); font-size: 13px; min-height: 1em; }
+  footer { margin-top: 18px; text-align: center; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <section id="login" class="panel" hidden>
+    <h2>PetCheck · Simulated Alexa+</h2>
+    <p class="status" style="text-align:left">Enter the household key. It's stored only in this browser.</p>
+    <form id="login-form">
+      <input id="key-input" type="password" placeholder="Household key" autocomplete="off" required />
+      <button class="btn" type="submit">Open</button>
+    </form>
+    <p class="error" id="login-error"></p>
+  </section>
+
+  <section id="app" hidden>
+    <header>
+      <h1>🐾 PetCheck</h1>
+      <span class="sub">Simulated Alexa+ · Amazon Bedrock → MCP</span>
+      <a href="/" target="_blank" id="household-link">Household page ↗</a>
+    </header>
+
+    <div class="grid">
+      <div class="panel">
+        <div class="device">
+          <div class="orb" id="orb"><span class="glyph">🐾</span></div>
+          <div class="status" id="status">Tap the mic and speak, or type below.</div>
+          <div class="interim" id="interim"></div>
+          <div class="speakers" id="speakers" role="radiogroup" aria-label="Who's speaking"></div>
+          <button class="mic" id="mic" title="Talk (or press Space)" aria-label="Talk">🎙️</button>
+          <form class="say" id="say">
+            <input id="text" placeholder="…or type what you'd say to Alexa" autocomplete="off" />
+            <button type="submit">Send</button>
+          </form>
+          <div class="suggest" id="suggest"></div>
+          <div class="opts">
+            <label><input type="checkbox" id="speak" checked /> Speak replies</label>
+            <button class="chip" id="clear" type="button">New conversation</button>
+          </div>
+        </div>
+        <div class="convo" id="convo"></div>
+      </div>
+
+      <div class="panel">
+        <h2>MCP traffic · this browser ⇄ Alexa sim ⇄ PetCheck MCP server</h2>
+        <div class="log" id="log"><p class="empty">Every HTTP request the assistant makes to the PetCheck MCP server (<code>/mcp</code>) appears here.</p></div>
+      </div>
+    </div>
+    <footer>Voice in and out runs in your browser. The assistant uses Amazon Bedrock and reaches PetCheck only through its MCP server.</footer>
+  </section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  var KEY_STORE = "petcheck.key", SPEAKER_STORE = "petcheck.speaker";
+  var SPEAKERS = ["Mom", "Dad", "Emma"];
+  var SUGGESTIONS = ["I fed Mochi", "Has anyone walked Biscuit?", "What's left for Mochi today?",
+    "How's Mochi doing this week?", "Mochi threw up this morning", "Book Mochi's checkup next Tuesday at 10"];
+  var state = { key: null, speaker: "Dad", history: [], busy: false, rec: null, listening: false };
+
+  function $(id) { return document.getElementById(id); }
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { return null; } }
+  if (new URLSearchParams(location.search).get("compact")) document.body.classList.add("compact");
+
+  // --- Speaker picker & suggestions ---------------------------------------
+  state.speaker = store(SPEAKER_STORE) || "Dad";
+  function renderSpeakers() {
+    var box = $("speakers"); box.textContent = "";
+    SPEAKERS.forEach(function (s) {
+      var b = el("button", "chip" + (s === state.speaker ? " on" : ""), (s === state.speaker ? "🗣 " : "") + s);
+      b.type = "button"; b.setAttribute("role", "radio"); b.setAttribute("aria-checked", s === state.speaker);
+      b.onclick = function () { state.speaker = s; store(SPEAKER_STORE, s); renderSpeakers(); };
+      box.appendChild(b);
+    });
+  }
+  SUGGESTIONS.forEach(function (s) {
+    var b = el("button", "chip", "“" + s + "”"); b.type = "button";
+    b.onclick = function () { send(s); };
+    $("suggest").appendChild(b);
+  });
+
+  // --- Orb / status --------------------------------------------------------
+  function mode(m, text) {
+    $("orb").className = "orb" + (m ? " " + m : "");
+    if (text != null) $("status").textContent = text;
+  }
+
+  // --- Conversation ----------------------------------------------------------
+  function bubble(role, text, who) {
+    var b = el("div", "bubble " + role);
+    b.appendChild(el("span", "who", who));
+    b.appendChild(document.createTextNode(text));
+    $("convo").appendChild(b);
+    $("convo").scrollTop = $("convo").scrollHeight;
+  }
+
+  // --- MCP log -------------------------------------------------------------
+  function pretty(x) { try { return typeof x === "string" ? x : JSON.stringify(x, null, 2); } catch (e) { return String(x); } }
+  function logTurn(text, r) {
+    var log = $("log");
+    if (log.querySelector(".empty")) log.textContent = "";
+    var head = el("div", "turn", state.speaker + ": “" + text + "”");
+    var frag = document.createDocumentFragment();
+    frag.appendChild(head);
+    (r.trace || []).forEach(function (t) {
+      var d = el("details", "call");
+      var s = el("summary");
+      s.appendChild(el("span", "verb", "POST"));
+      s.appendChild(el("span", "m", "/mcp " + t.method));
+      if (t.tool) s.appendChild(el("span", "tool", t.tool));
+      s.appendChild(el("span", "code" + (t.status >= 400 ? " bad" : ""), String(t.status)));
+      s.appendChild(el("span", "ms", t.ms + " ms"));
+      d.appendChild(s);
+      var pre = el("pre");
+      pre.appendChild(el("b", null, "→ request\n")); pre.appendChild(document.createTextNode(pretty(t.request) + "\n\n"));
+      pre.appendChild(el("b", null, "← response (" + t.status + ")\n")); pre.appendChild(document.createTextNode(t.response === "" ? "(empty — 202 Accepted)" : pretty(t.response)));
+      d.appendChild(pre);
+      if (t.method === "tools/call") d.open = true;
+      frag.appendChild(d);
+    });
+    var engineText = r.engine === "rules"
+      ? "Rules engine (backup)" + (r.engineNote && r.engineNote.indexOf("Bedrock unavailable") === 0 ? " · Bedrock unavailable on this account" : "")
+      : "Amazon Bedrock " + r.model;
+    frag.appendChild(el("div", "model", engineText + " · " + (r.toolCalls || []).length + " tool call(s) · " + r.ms + " ms total"));
+    log.insertBefore(frag, log.firstChild);
+    // Collapse tool bodies from older turns to keep the panel readable.
+    var opened = log.querySelectorAll("details.call[open]");
+    for (var i = 0; i < opened.length; i++) if (i >= 2) opened[i].open = false;
+  }
+
+  // --- Talking to the assistant ---------------------------------------------
+  function speak(text, done) {
+    if (!$("speak").checked || !("speechSynthesis" in window)) { done(); return; }
+    var u = new SpeechSynthesisUtterance(text);
+    u.lang = "en-US"; u.rate = 1.03;
+    var voices = speechSynthesis.getVoices();
+    var pick = voices.find(function (v) { return /Samantha|Joanna|Aria|Google US English|Jenny/i.test(v.name); }) ||
+               voices.find(function (v) { return v.lang === "en-US"; });
+    if (pick) u.voice = pick;
+    u.onend = done; u.onerror = done;
+    speechSynthesis.cancel(); speechSynthesis.speak(u);
+  }
+
+  function send(text) {
+    text = (text || "").trim();
+    if (!text || state.busy) return;
+    state.busy = true; $("mic").disabled = true;
+    bubble("user", text, state.speaker);
+    mode("thinking", "Thinking…"); $("interim").textContent = "";
+    fetch("/api/assistant", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": state.key },
+      body: JSON.stringify({ text: text, speaker: state.speaker, history: state.history.slice(-10) }),
+    }).then(function (res) {
+      if (res.status === 401) { var e = new Error("unauthorized"); e.unauthorized = true; throw e; }
+      return res.json().then(function (j) { if (!res.ok) throw new Error(j.error || res.statusText); return j; });
+    }).then(function (r) {
+      state.history.push({ role: "user", text: text }, { role: "assistant", text: r.reply });
+      bubble("alexa", r.reply, "Alexa");
+      logTurn(text, r);
+      mode("speaking", "");
+      speak(r.reply, function () { mode("", "Tap the mic and speak, or type below."); });
+    }).catch(function (e) {
+      if (e.unauthorized) { logout("That key didn't work."); return; }
+      bubble("alexa err", "Something went wrong: " + e.message, "Error");
+      mode("", "Tap the mic and speak, or type below.");
+    }).then(function () { state.busy = false; $("mic").disabled = false; });
+  }
+
+  $("say").onsubmit = function (ev) { ev.preventDefault(); var v = $("text").value; $("text").value = ""; send(v); };
+  $("clear").onclick = function () { state.history = []; $("convo").textContent = ""; mode("", "New conversation. Tap the mic and speak."); };
+
+  // --- Voice input (Web Speech API) -------------------------------------------
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    $("mic").disabled = true; $("mic").title = "Voice input needs Chrome or Safari";
+    $("status").textContent = "Voice input isn't available in this browser. Type instead (Chrome or Safari support the mic).";
+  }
+  function listen() {
+    if (!SR || state.busy) return;
+    if (state.listening) { state.rec && state.rec.stop(); return; }
+    if ("speechSynthesis" in window) speechSynthesis.cancel();
+    var rec = new SR(); state.rec = rec;
+    rec.lang = "en-US"; rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = false;
+    var finalText = "";
+    rec.onstart = function () { state.listening = true; $("mic").classList.add("live"); mode("listening", "Listening… (" + state.speaker + ")"); };
+    rec.onresult = function (ev) {
+      var interim = "";
+      for (var i = ev.resultIndex; i < ev.results.length; i++) {
+        if (ev.results[i].isFinal) finalText += ev.results[i][0].transcript; else interim += ev.results[i][0].transcript;
+      }
+      $("interim").textContent = (finalText + interim).trim();
+    };
+    rec.onerror = function (ev) {
+      var msg = ev.error === "not-allowed" ? "Microphone blocked. Allow it in the browser, or type instead." :
+                ev.error === "no-speech" ? "Didn't hear anything. Try again." : "Voice input error: " + ev.error;
+      mode("", msg);
+    };
+    rec.onend = function () {
+      state.listening = false; $("mic").classList.remove("live");
+      var t = (finalText || $("interim").textContent).trim();
+      if (t) send(t); else if ($("orb").className.indexOf("listening") >= 0) mode("", "Tap the mic and speak, or type below.");
+    };
+    try { rec.start(); } catch (e) { mode("", "Couldn't start the mic: " + e.message); }
+  }
+  $("mic").onclick = listen;
+  document.addEventListener("keydown", function (ev) {
+    if (ev.code === "Space" && document.activeElement && document.activeElement.tagName !== "INPUT") { ev.preventDefault(); listen(); }
+  });
+
+  // --- Key -----------------------------------------------------------------
+  function start() { $("login").hidden = true; $("app").hidden = false; renderSpeakers(); }
+  function logout(msg) { store(KEY_STORE, null); state.key = null; $("app").hidden = true; $("login").hidden = false; $("login-error").textContent = msg || ""; }
+  $("login-form").onsubmit = function (ev) { ev.preventDefault(); state.key = $("key-input").value.trim(); store(KEY_STORE, state.key); $("key-input").value = ""; start(); };
+  var m = location.hash.match(/key=([^&]+)/);
+  if (m) { store(KEY_STORE, decodeURIComponent(m[1])); history.replaceState(null, "", location.pathname + location.search); }
+  if ("speechSynthesis" in window) speechSynthesis.getVoices(); // warm up the voice list
+  state.key = store(KEY_STORE);
+  if (state.key) start(); else $("login").hidden = false;
+})();
+</script>
+</body>
+</html>

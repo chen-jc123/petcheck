@@ -18,6 +18,8 @@ TABLE="${TABLE_NAME:-petcheck}"
 REGION="${AWS_REGION:-$(aws configure get region 2>/dev/null || true)}"
 REGION="${REGION:-us-east-1}"
 HOUSEHOLD_TZ="${HOUSEHOLD_TZ:-America/Detroit}"
+# Simulated Alexa+ model (Amazon Bedrock). Override in .env.deploy, e.g.
+#   BEDROCK_MODEL_ID=us.amazon.nova-pro-v1:0
 export AWS_REGION="$REGION" AWS_PAGER=""
 
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
@@ -25,6 +27,7 @@ echo "Deploying $FN to account $ACCOUNT in $REGION"
 
 # API key: generated once, kept in .env.deploy (git-ignored). Never commit it.
 if [ -f .env.deploy ]; then source .env.deploy; fi
+BEDROCK_MODEL_ID="${BEDROCK_MODEL_ID:-us.amazon.nova-lite-v1:0}"
 if [ -z "${API_KEY:-}" ]; then
   API_KEY=$(openssl rand -hex 24)
   echo "API_KEY=$API_KEY" > .env.deploy
@@ -70,17 +73,21 @@ aws iam put-role-policy --role-name "$ROLE" --policy-name petcheck-dynamodb --po
     \"Effect\": \"Allow\",
     \"Action\": [\"dynamodb:Query\", \"dynamodb:BatchWriteItem\", \"dynamodb:PutItem\"],
     \"Resource\": \"arn:aws:dynamodb:$REGION:$ACCOUNT:table/$TABLE\"
+  },{
+    \"Effect\": \"Allow\",
+    \"Action\": [\"bedrock:InvokeModel\", \"bedrock:InvokeModelWithResponseStream\"],
+    \"Resource\": [\"arn:aws:bedrock:*::foundation-model/*\", \"arn:aws:bedrock:*:$ACCOUNT:inference-profile/*\"]
   }$SNS_STATEMENT]
 }"
 ROLE_ARN="arn:aws:iam::$ACCOUNT:role/$ROLE"
 
 echo "4/7 Lambda function..."
-ENV_JSON="{\"Variables\":{\"STORAGE\":\"dynamodb\",\"TABLE_NAME\":\"$TABLE\",\"HOUSEHOLD_TZ\":\"$HOUSEHOLD_TZ\",\"API_KEY\":\"$API_KEY\",\"ALERT_TOPIC_ARN\":\"$TOPIC_ARN\",\"NODE_OPTIONS\":\"--enable-source-maps\"}}"
+ENV_JSON="{\"Variables\":{\"STORAGE\":\"dynamodb\",\"TABLE_NAME\":\"$TABLE\",\"HOUSEHOLD_TZ\":\"$HOUSEHOLD_TZ\",\"API_KEY\":\"$API_KEY\",\"ALERT_TOPIC_ARN\":\"$TOPIC_ARN\",\"BEDROCK_MODEL_ID\":\"$BEDROCK_MODEL_ID\",\"NODE_OPTIONS\":\"--enable-source-maps\"}}"
 if aws lambda get-function --function-name "$FN" >/dev/null 2>&1; then
   aws lambda update-function-code --function-name "$FN" --zip-file fileb://dist/petcheck-lambda.zip >/dev/null
   aws lambda wait function-updated-v2 --function-name "$FN"
   aws lambda update-function-configuration --function-name "$FN" \
-    --environment "$ENV_JSON" --timeout 15 --memory-size 512 >/dev/null
+    --environment "$ENV_JSON" --timeout 30 --memory-size 512 >/dev/null
   aws lambda wait function-updated-v2 --function-name "$FN"
   echo "   updated $FN"
 else
@@ -89,7 +96,7 @@ else
         --runtime nodejs22.x --architectures arm64 \
         --handler lambda.handler --role "$ROLE_ARN" \
         --zip-file fileb://dist/petcheck-lambda.zip \
-        --timeout 15 --memory-size 512 \
+        --timeout 30 --memory-size 512 \
         --environment "$ENV_JSON" \
         --tags project=petcheck >/dev/null 2>/tmp/petcheck-create.err; then
       break
@@ -169,6 +176,7 @@ cat <<EOF
 
 ✔ PetCheck is live
   Household page: $URL/   (enter the key from .env.deploy once)
+  Alexa sim:      $URL/alexa   ·   Split-screen demo: $URL/demo   (Bedrock model: $BEDROCK_MODEL_ID)
   MCP URL:  $URL/mcp
   API:      $URL/api/today   ·   POST $URL/api/check-missed {"time":"18:30"}
   Auth:     x-api-key: <API_KEY from .env.deploy>   (or Authorization: Bearer <key>)

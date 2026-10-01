@@ -2,6 +2,7 @@
 //
 //   GET  /api/today[?time=HH:MM]          everything the household page shows for today
 //   POST /api/check-missed {time?: HH:MM} run the missed-task check now (demo / manual)
+//   POST /api/assistant {text, speaker, history}  simulated Alexa+ turn (Bedrock + MCP client)
 //
 // `time` pretends it's that time today, so the demo can jump to 6:30 PM and run
 // the *real* check logic. Both endpoints require the API key when one is set.
@@ -12,6 +13,7 @@ import { localParts, localToDate, now, setDemoOffset } from "./clock.js";
 import { storage } from "./mcp.js";
 import { notifyOwner } from "./notify.js";
 import { PetCheckError, checkMissedTasks, todayView, type Alert } from "./store.js";
+import { runAssistant, type AssistantRequest } from "./assistant.js";
 
 export interface ApiResult {
   status: number;
@@ -57,6 +59,7 @@ export async function handleApi(
   path: string,
   query: Record<string, string | undefined>,
   body: unknown,
+  ctx: { mcpUrl?: string } = {},
 ): Promise<ApiResult> {
   try {
     const p = path.replace(/\/+$/, "");
@@ -68,7 +71,19 @@ export async function handleApi(
       const time = (body as { time?: string } | undefined)?.time ?? query.time;
       return { status: 200, body: await runMissedCheck(time) };
     }
-    return { status: 404, body: { error: "Unknown API route. Try GET /api/today or POST /api/check-missed." } };
+    if (method === "POST" && p === "/assistant") {
+      if (!ctx.mcpUrl) return { status: 500, body: { error: "MCP URL unknown" } };
+      try {
+        const r = await runAssistant(body as AssistantRequest, { mcpUrl: ctx.mcpUrl, apiKey: process.env.API_KEY });
+        return { status: 200, body: r };
+      } catch (err) {
+        const e = err as { name?: string; message?: string };
+        console.error("assistant error:", err);
+        // Surface Bedrock setup problems clearly (model access, region, permissions).
+        return { status: 502, body: { error: `${e.name ?? "Error"}: ${e.message ?? "assistant failed"}` } };
+      }
+    }
+    return { status: 404, body: { error: "Unknown API route. Try GET /api/today, POST /api/check-missed or POST /api/assistant." } };
   } catch (err) {
     if (err instanceof PetCheckError) return { status: 400, body: { error: err.message } };
     console.error("API error:", err);

@@ -19,6 +19,8 @@ await build({
   logLevel: "info",
 });
 
-// The household page is read from disk at runtime (see src/page.ts).
-copyFileSync("src/household.html", "dist/lambda/household.html");
-console.log("  dist/lambda/household.html (copied)");
+// The pages are read from disk at runtime (see src/page.ts).
+for (const f of ["household.html", "alexa.html", "demo.html"]) {
+  copyFileSync(`src/${f}`, `dist/lambda/${f}`);
+  console.log(`  dist/lambda/${f} (copied)`);
+}
