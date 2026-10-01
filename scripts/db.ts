@@ -2,6 +2,8 @@
 //   npm run db:create   create the table (free-tier sized) and wait until it's ready
 //   npm run db:reset    delete this household's data and load fresh demo data
 //   npm run db:status   show table status and how many records the household has
+//   npm run db:demo     like db:reset, plus today's tasks so far marked done (dinners left open)
+//                       so the household page starts tidy for recording the demo video
 
 import {
   CreateTableCommand,
@@ -11,7 +13,7 @@ import {
   waitUntilTableExists,
 } from "@aws-sdk/client-dynamodb";
 import { HOUSEHOLD_ID, REGION, TABLE_NAME, batchWrite, queryHousehold } from "../src/dynamo.js";
-import { seedDemoData, takeChanges } from "../src/store.js";
+import { seedDemoData, seedTodaySoFar, takeChanges } from "../src/store.js";
 import { dynamoBackend } from "../src/dynamo.js";
 
 const client = new DynamoDBClient({ region: REGION });
@@ -44,14 +46,19 @@ async function create() {
   console.log(`✔ Table "${TABLE_NAME}" is ACTIVE.`);
 }
 
-async function reset() {
+async function reset(withToday = false) {
   const existing = await queryHousehold();
   await batchWrite(existing.map((it) => ({ DeleteRequest: { Key: { pk: it.pk, sk: it.sk } } })));
   console.log(`Deleted ${existing.length} records for household "${HOUSEHOLD_ID}".`);
   seedDemoData();
+  const today = withToday ? seedTodaySoFar() : 0;
   const changes = takeChanges();
   await dynamoBackend().saveChanges(changes);
   console.log(`✔ Loaded ${changes.length} demo records (Mochi, Biscuit and last week's history).`);
+  if (withToday) {
+    console.log(`✔ Marked ${today} of today's tasks done so far. Both dinners are left open:`);
+    console.log(`  Dad's "I fed Mochi" counts as Mochi's dinner; Biscuit's dinner is the 7 PM missed-task scene.`);
+  }
 }
 
 async function status() {
@@ -66,9 +73,9 @@ async function status() {
 }
 
 const cmd = process.argv[2];
-const commands: Record<string, () => Promise<void>> = { create, reset, status };
+const commands: Record<string, () => Promise<void>> = { create, reset: () => reset(false), demo: () => reset(true), status };
 if (!commands[cmd]) {
-  console.error("Usage: tsx scripts/db.ts <create|reset|status>");
+  console.error("Usage: tsx scripts/db.ts <create|reset|demo|status>");
   process.exit(1);
 }
 commands[cmd]().catch((err) => {

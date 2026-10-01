@@ -9,6 +9,7 @@ import {
   loadState,
   resetStore,
   seedDemoData,
+  seedTodaySoFar,
   takeChanges,
   type Alert,
   type Change,
@@ -40,6 +41,8 @@ export interface Storage {
 
 export function memoryStorage(seed = true): Storage {
   if (seed) seedDemoData();
+  // `npm run demo`: start the day tidy (everything due so far done, both dinners open).
+  if (seed && process.env.DEMO_TODAY) seedTodaySoFar();
   takeChanges(); // nothing to persist in memory mode
   return {
     mode: "memory",

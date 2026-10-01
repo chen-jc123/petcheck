@@ -24,7 +24,8 @@
     "test:rules": "tsx test/rules.ts",
     "test:oauth": "tsx test/oauth.ts",
     "check:listing": "node scripts/check-listing.mjs",
-    "demo": "ASSISTANT_ENGINE=rules tsx src/server.ts"
+    "demo": "ASSISTANT_ENGINE=rules DEMO_TODAY=1 tsx src/server.ts",
+    "db:demo": "tsx scripts/db.ts demo"
   },
   "engines": {
     "node": ">=20"

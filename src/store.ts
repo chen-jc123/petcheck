@@ -184,6 +184,33 @@ export function seedDemoData(): void {
  * Today is left empty so the live demo starts clean.
  * Mochi: dinner missed 3 days ago, litter skipped 5 days ago, one note 2 days ago.
  */
+/**
+ * Demo video setup: mark every routine task due before now as done (by realistic
+ * family members), so the household page starts tidy at any time of day. Both
+ * dinners always stay open: Dad's "I fed Mochi" becomes Mochi's dinner, and
+ * Biscuit's dinner is the task nobody did for the 7 PM missed-task scene.
+ */
+export function seedTodaySoFar(keepOpen = (_pet: string, label: string) => label === "dinner"): number {
+  const today = localParts(now()).date;
+  const nowMs = now().getTime();
+  const WHO: Record<Activity, string> = { feed: "Mom", walk: "Emma", meds: "Mom", litter: "Emma", water: "Dad", groom: "Emma", other: "Dad" };
+  let n = 0;
+  for (const pet of db.pets) {
+    pet.routine.forEach((r, i) => {
+      const label = r.label ?? r.activity;
+      if (keepOpen(pet.name, label)) return;
+      const m = hhmmToMinutes(r.time) + 3 + ((i * 5) % 9);
+      const time = `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+      const at = localToDate(today, time);
+      if (at.getTime() >= nowMs) return;
+      const by = pet.routine.filter((x) => x.activity === r.activity).length > 1 && r.activity === "feed" && hhmmToMinutes(r.time) < 720 ? "Dad" : WHO[r.activity];
+      insert("event", { id: newId("evt"), petId: pet.id, activity: r.activity, by, at: at.toISOString() });
+      n++;
+    });
+  }
+  return n;
+}
+
 function seedHistory(): void {
   const [mochi, biscuit] = db.pets;
   const pastDays = lastNLocalDates(7).slice(0, 6); // the 6 days before today
