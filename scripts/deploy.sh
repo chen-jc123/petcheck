@@ -30,9 +30,18 @@ if [ -f .env.deploy ]; then source .env.deploy; fi
 BEDROCK_MODEL_ID="${BEDROCK_MODEL_ID:-us.amazon.nova-lite-v1:0}"
 if [ -z "${API_KEY:-}" ]; then
   API_KEY=$(openssl rand -hex 24)
-  echo "API_KEY=$API_KEY" > .env.deploy
+  echo "API_KEY=$API_KEY" >> .env.deploy
   echo "Generated a new API key (saved in .env.deploy)"
 fi
+# OAuth 2.1 for Alexa+ (client credentials + authorization code with PKCE).
+if [ -z "${OAUTH_CLIENT_SECRET:-}" ]; then
+  OAUTH_CLIENT_ID="${OAUTH_CLIENT_ID:-alexa-petcheck}"
+  OAUTH_CLIENT_SECRET=$(openssl rand -hex 32)
+  OAUTH_SIGNING_KEY=$(openssl rand -hex 32)
+  printf 'OAUTH_CLIENT_ID=%s\nOAUTH_CLIENT_SECRET=%s\nOAUTH_SIGNING_KEY=%s\n' "$OAUTH_CLIENT_ID" "$OAUTH_CLIENT_SECRET" "$OAUTH_SIGNING_KEY" >> .env.deploy
+  echo "Generated OAuth client credentials for Alexa+ (saved in .env.deploy)"
+fi
+OAUTH_CLIENT_ID="${OAUTH_CLIENT_ID:-alexa-petcheck}"
 
 echo "1/7 Building..."
 node scripts/build-lambda.mjs
@@ -82,7 +91,7 @@ aws iam put-role-policy --role-name "$ROLE" --policy-name petcheck-dynamodb --po
 ROLE_ARN="arn:aws:iam::$ACCOUNT:role/$ROLE"
 
 echo "4/7 Lambda function..."
-ENV_JSON="{\"Variables\":{\"STORAGE\":\"dynamodb\",\"TABLE_NAME\":\"$TABLE\",\"HOUSEHOLD_TZ\":\"$HOUSEHOLD_TZ\",\"API_KEY\":\"$API_KEY\",\"ALERT_TOPIC_ARN\":\"$TOPIC_ARN\",\"BEDROCK_MODEL_ID\":\"$BEDROCK_MODEL_ID\",\"NODE_OPTIONS\":\"--enable-source-maps\"}}"
+ENV_JSON="{\"Variables\":{\"STORAGE\":\"dynamodb\",\"TABLE_NAME\":\"$TABLE\",\"HOUSEHOLD_TZ\":\"$HOUSEHOLD_TZ\",\"API_KEY\":\"$API_KEY\",\"ALERT_TOPIC_ARN\":\"$TOPIC_ARN\",\"BEDROCK_MODEL_ID\":\"$BEDROCK_MODEL_ID\",\"OAUTH_CLIENT_ID\":\"$OAUTH_CLIENT_ID\",\"OAUTH_CLIENT_SECRET\":\"$OAUTH_CLIENT_SECRET\",\"OAUTH_SIGNING_KEY\":\"$OAUTH_SIGNING_KEY\",\"OAUTH_REDIRECT_URIS\":\"${OAUTH_REDIRECT_URIS:-}\",\"NODE_OPTIONS\":\"--enable-source-maps\"}}"
 if aws lambda get-function --function-name "$FN" >/dev/null 2>&1; then
   aws lambda update-function-code --function-name "$FN" --zip-file fileb://dist/petcheck-lambda.zip >/dev/null
   aws lambda wait function-updated-v2 --function-name "$FN"
@@ -169,6 +178,8 @@ TOOLS=$(curl -s -X POST "$URL/mcp" \
   -H "authorization: Bearer $API_KEY" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | grep -o '"name":"[a-z_]*"' | tr '\n' ' ' || true)
 echo "   tools: ${TOOLS:-<none — check CloudWatch logs>}"
+OAUTH=$(curl -s -X POST "$URL/oauth/token" -u "$OAUTH_CLIENT_ID:$OAUTH_CLIENT_SECRET" -d "grant_type=client_credentials&resource=$URL/mcp" | grep -o '"scope":"[^"]*"' || true)
+echo "   oauth client_credentials: ${OAUTH:-<failed>}"
 CHECK=$(curl -s -X POST "$URL/api/check-missed" -H "content-type: application/json" -H "x-api-key: $API_KEY" -d '{}' || true)
 echo "   missed-task check: $(echo "$CHECK" | grep -o '"checkedAt":"[^"]*"' || echo "$CHECK")"
 
@@ -181,5 +192,7 @@ cat <<EOF
   API:      $URL/api/today   ·   POST $URL/api/check-missed {"time":"18:30"}
   Auth:     x-api-key: <API_KEY from .env.deploy>   (or Authorization: Bearer <key>)
   Schedule: $SCHEDULE runs every 5 minutes
+  OAuth (Alexa+): metadata $URL/.well-known/oauth-authorization-server
+                  client_id $OAUTH_CLIENT_ID · client_secret in .env.deploy (OAUTH_CLIENT_SECRET)
   Logs:     aws logs tail /aws/lambda/$FN --follow
 EOF

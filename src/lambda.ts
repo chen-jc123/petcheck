@@ -8,7 +8,8 @@
 //   2. EventBridge Scheduler: {"petcheck": "check-missed"} every 5 minutes.
 
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { METHOD_NOT_ALLOWED, UNAUTHORIZED, apiKeyOk, buildServer, healthInfo } from "./mcp.js";
+import { METHOD_NOT_ALLOWED, apiKeyOk, buildServer, healthInfo } from "./mcp.js";
+import { authenticate, handleOAuth, mcpAccessError } from "./oauth.js";
 import { CORS_HEADERS, handleApi, runMissedCheck } from "./api.js";
 import { page } from "./page.js";
 
@@ -82,8 +83,21 @@ async function handleHttp(event: FunctionUrlEvent): Promise<LambdaResult> {
     return { statusCode: r.status, headers: { "content-type": "application/json", ...CORS_HEADERS }, body: JSON.stringify(r.body) };
   }
 
+  // OAuth 2.1 for Alexa+ (metadata, account-linking page, token endpoint).
+  const base = `https://${event.requestContext.domainName}`;
+  const oauth = handleOAuth({
+    method,
+    path,
+    query: new URLSearchParams(event.rawQueryString ?? ""),
+    headers,
+    body,
+    base,
+  });
+  if (oauth) return { statusCode: oauth.status, headers: oauth.headers, body: oauth.body };
+
   if (path !== "/mcp") return json(404, { error: "Not found. The MCP endpoint is /mcp." });
-  if (!apiKeyOk(headers["authorization"], headers["x-api-key"])) return json(401, UNAUTHORIZED);
+  const auth = authenticate(headers["authorization"], headers["x-api-key"], `${base}/mcp`);
+  if (!auth) return json(401, { jsonrpc: "2.0", error: { code: -32001, message: "Missing or invalid credentials." }, id: null });
   if (method !== "POST") return json(405, METHOD_NOT_ALLOWED);
   let parsedBody: unknown;
   try {
@@ -91,6 +105,8 @@ async function handleHttp(event: FunctionUrlEvent): Promise<LambdaResult> {
   } catch {
     return json(400, { jsonrpc: "2.0", error: { code: -32700, message: "Parse error" }, id: null });
   }
+  const denied = mcpAccessError(auth, parsedBody);
+  if (denied) return json(denied.status, denied.body);
 
   const url = `https://${event.requestContext.domainName}${path}${event.rawQueryString ? `?${event.rawQueryString}` : ""}`;
   const request = new Request(url, { method, headers, body });

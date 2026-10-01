@@ -3,6 +3,9 @@
 import assert from "node:assert/strict";
 
 process.env.API_KEY ??= "test";
+process.env.OAUTH_CLIENT_ID = "alexa-petcheck";
+process.env.OAUTH_CLIENT_SECRET = "client-secret";
+process.env.OAUTH_SIGNING_KEY = "signing-key";
 const KEY = process.env.API_KEY;
 const { handler } = await import("../src/lambda.js");
 type HttpResult = { statusCode: number; headers?: Record<string, string>; body?: string };
@@ -86,5 +89,47 @@ console.log(`✔ GET / → household page (${r.body!.length} bytes of HTML)`);
 const scheduled = (await handler({ petcheck: "check-missed" })) as { checkedAt: string; alerts: unknown[] };
 assert.ok(scheduled.checkedAt);
 console.log(`✔ scheduled event: checked at ${scheduled.checkedAt}, ${scheduled.alerts.length} new alert(s)`);
+
+// OAuth through the real handler: service token can list tools but not call them;
+// a linked-household token (authorization code + PKCE) can call tools.
+{
+  const { createHash, randomBytes } = await import("node:crypto");
+  const form = (path: string, fields: Record<string, string>, headers: Record<string, string> = {}) => ({
+    rawPath: path,
+    headers: { "content-type": "application/x-www-form-urlencoded", ...headers },
+    body: new URLSearchParams(fields).toString(),
+    isBase64Encoded: false,
+    requestContext: { domainName: "example.lambda-url.us-east-1.on.aws", http: { method: "POST" } },
+  });
+  const mcpUrl = "https://example.lambda-url.us-east-1.on.aws/mcp";
+  const basic = { authorization: "Basic " + Buffer.from("alexa-petcheck:client-secret").toString("base64") };
+
+  r = await http(event("GET", "/.well-known/oauth-authorization-server"));
+  assert.equal(JSON.parse(r.body!).issuer, "https://example.lambda-url.us-east-1.on.aws");
+  r = await http(form("/oauth/token", { grant_type: "client_credentials", resource: mcpUrl }, basic));
+  const svc = JSON.parse(r.body!).access_token;
+  r = await http(event("POST", "/mcp", rpc(10, "tools/list"), { authorization: `Bearer ${svc}` }));
+  assert.equal(r.statusCode, 200, r.body);
+  r = await http(event("POST", "/mcp", rpc(11, "tools/call", { name: "get_status", arguments: {} }), { authorization: `Bearer ${svc}` }));
+  assert.equal(r.statusCode, 403);
+  console.log("✔ OAuth service token: tools/list 200, tools/call 403 insufficient_scope");
+
+  const verifier = randomBytes(32).toString("base64url");
+  const q = new URLSearchParams({
+    response_type: "code", client_id: "alexa-petcheck", redirect_uri: "https://layla.amazon.com/api/skill/link/X", state: "s1",
+    code_challenge: createHash("sha256").update(verifier).digest("base64url"), code_challenge_method: "S256", scope: "mcp:tools",
+  });
+  r = await http({ ...event("GET", "/oauth/authorize"), rawQueryString: q.toString() } as never);
+  assert.equal(r.statusCode, 200);
+  assert.match(r.headers!["content-type"], /text\/html/);
+  r = await http(form("/oauth/authorize", { ...Object.fromEntries(q), household_key: process.env.API_KEY!, decision: "allow" }));
+  assert.equal(r.statusCode, 302);
+  const code = new URL(r.headers!.location).searchParams.get("code")!;
+  r = await http(form("/oauth/token", { grant_type: "authorization_code", code, redirect_uri: "https://layla.amazon.com/api/skill/link/X", code_verifier: verifier }, basic));
+  const user = JSON.parse(r.body!).access_token;
+  r = await http(event("POST", "/mcp", rpc(12, "tools/call", { name: "get_status", arguments: { pet: "Mochi" } }), { authorization: `Bearer ${user}` }));
+  assert.equal(r.statusCode, 200, r.body);
+  console.log("✔ OAuth account linking (code + PKCE) → tools/call get_status:", JSON.parse(r.body!).result.content[0].text.slice(0, 60) + "…");
+}
 
 console.log("\nAll Lambda handler checks passed.");

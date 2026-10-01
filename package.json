@@ -21,7 +21,8 @@
     "test:lambda": "tsx test/lambda.ts",
     "test:alerts": "tsx test/alerts.ts",
     "test:assistant": "tsx test/assistant.ts",
-    "test:rules": "tsx test/rules.ts"
+    "test:rules": "tsx test/rules.ts",
+    "test:oauth": "tsx test/oauth.ts"
   },
   "engines": {
     "node": ">=20"
