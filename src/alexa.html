@@ -231,13 +231,26 @@
   }
 
   // --- Talking to the assistant ---------------------------------------------
+  // Only ever use an English (US) voice. Preferred names are matched as whole words,
+  // so e.g. Bulgarian "Daria" can't match "Aria".
+  function pickVoice() {
+    var voices = ("speechSynthesis" in window ? speechSynthesis.getVoices() : []).filter(function (v) {
+      return /^en[-_]US$/i.test(v.lang);
+    });
+    var preferred = ["Samantha", "Google US English", "Microsoft Aria", "Microsoft Jenny", "Ava", "Allison", "Susan", "Alex"];
+    for (var i = 0; i < preferred.length; i++) {
+      var re = new RegExp("^" + preferred[i] + "\\b", "i");
+      var hit = voices.find(function (v) { return re.test(v.name); });
+      if (hit) return hit;
+    }
+    return voices[0] || null;
+  }
+
   function speak(text, done) {
     if (!$("speak").checked || !("speechSynthesis" in window)) { done(); return; }
     var u = new SpeechSynthesisUtterance(text);
     u.lang = "en-US"; u.rate = 1.03;
-    var voices = speechSynthesis.getVoices();
-    var pick = voices.find(function (v) { return /Samantha|Joanna|Aria|Google US English|Jenny/i.test(v.name); }) ||
-               voices.find(function (v) { return v.lang === "en-US"; });
+    var pick = pickVoice();
     if (pick) u.voice = pick;
     u.onend = done; u.onerror = done;
     speechSynthesis.cancel(); speechSynthesis.speak(u);
