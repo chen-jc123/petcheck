@@ -116,6 +116,43 @@ Entries are written at the moment the friction happens, not reconstructed afterw
 
 ---
 
+## FL-006 — New account blocked from Amazon Bedrock ("verify you are a corporate customer"), discovered only at the first API call
+
+- **Date:** 2026-10-01
+- **Tool / API / SDK:** Amazon Bedrock Runtime (Converse API, `us.amazon.nova-lite-v1:0`, us-east-1), AWS Support Center
+- **What I was trying to do:** Power the simulated Alexa+ page with Bedrock: the model picks PetCheck tools, which are then called through the MCP server.
+- **Steps taken:**
+  1. Added `bedrock:InvokeModel` permissions to the Lambda role and deployed.
+  2. Sent "I fed Mochi" from the simulated Alexa+ page.
+  3. Opened AWS Support → "How can we help?" assistant, pasted the error; it replied "unable to offer a recommendation".
+  4. Created a case: Account and billing → Account Activation → Bedrock Allowlisting.
+- **Expected result:** An AWS account with valid IAM permissions can call a first-party Amazon model (Nova), or the console warns up front that Bedrock needs extra verification for this account.
+- **Actual result:**
+  ```
+  ValidationException: To access Amazon Bedrock, you must provide further information so we can verify you are
+  a corporate customer and that we can grant you access given applicable law and internal policy.
+  ```
+  Nothing in IAM, the Bedrock console or the account setup flow indicated this restriction beforehand. The exception type (`ValidationException`) suggests a malformed request rather than an account-level block. The Support assistant couldn't route the issue; I had to find the "Bedrock Allowlisting" category manually.
+- **Severity:** High (blocks the LLM part of the project; wait time for approval during a 3-week hackathon)
+- **Workaround:** Built a fallback: the assistant tries Bedrock and, on this specific access error, switches to a rule-based intent engine that still calls the MCP server, so the demo works. It retries Bedrock every 10 minutes and switches back automatically once access is granted. Submitted the allowlisting case.
+- **Suggested improvement:** (1) Show Bedrock eligibility status on the Bedrock console home page for new accounts, with a one-click request; (2) return a distinct error such as `AccountNotVerifiedException` instead of `ValidationException`; (3) let the Support assistant recognize this exact error message and pre-fill the Bedrock Allowlisting case.
+
+---
+
+## FL-007 — Browser speech recognition turns pet names into common words ("Mochi" → "Monkey")
+
+- **Date:** 2026-10-01
+- **Tool / API / SDK:** Web Speech API (`webkitSpeechRecognition`) in the simulated Alexa+ page
+- **What I was trying to do:** Log "I fed Mochi" by voice.
+- **Steps taken:** Pressed the mic and said "I fed Mochi" several times.
+- **Expected result:** The transcript contains "Mochi".
+- **Actual result:** Transcripts came back as "I fed Monkey" and "I fed Machi". There's no way to give the recognizer a list of expected names (the `SpeechGrammarList` API is not supported in practice).
+- **Severity:** Medium (wrong or failed logs in a voice-first product)
+- **Workaround:** Server-side fuzzy name matching (edit distance ≤ 2, prefix match, and "the cat"/"the dog" → the household's only cat/dog), so "Machi"/"Mochie"/"mocha" resolve to Mochi; anything further off gets "I don't know a pet called Monkey. I know Mochi and Biscuit." instead of a wrong log.
+- **Suggested improvement:** For Alexa+ MCP add-ons: let a server declare custom vocabulary or entity values (e.g. pet names from the household's data) so Alexa's speech recognition is biased toward them, similar to custom slot values in classic Alexa skills.
+
+---
+
 <!-- Add new entries above this line, newest at the bottom. Focus on Amazon tooling:
      Alexa+ MCP Toolkit & QuickStart, Alexa developer console, AWS (Lambda, DynamoDB,
      EventBridge, Bedrock), Kiro, and the MCP SDK / Inspector. -->
