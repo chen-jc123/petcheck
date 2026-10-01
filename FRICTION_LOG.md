@@ -153,6 +153,29 @@ Entries are written at the moment the friction happens, not reconstructed afterw
 
 ---
 
+## FL-008 — Alexa+ MCP Toolkit setup: AccessDenied assuming Amazon's developer-tools role, with no documented way to get access
+
+- **Date:** 2026-10-01
+- **Tool / API / SDK:** Alexa+ MCP Toolkit setup ("Set Up Your Development Environment"), AWS STS, `alexa-ai` CLI installation
+- **What I was trying to do:** Install the `alexa-ai` CLI to connect the PetCheck MCP server (already live on Lambda with OAuth 2.1) to real Alexa+.
+- **Steps taken:**
+  1. Completed the Amazon developer registration (developer.amazon.com).
+  2. Followed the docs: created profile `alexa-ai-user`, then `alexa-ai` with `role_arn arn:aws:iam::372468808636:role/AddOn3PDeveloperToolsRead`, `region us-west-2`.
+  3. Ran `aws sts get-caller-identity --profile alexa-ai`.
+  4. Following the troubleshooting page, explicitly attached an inline policy allowing `sts:AssumeRole` on that exact role ARN (the user already had AdministratorAccess) and retried.
+- **Expected result:** The role is assumed, so CodeArtifact login and `npm install -g @alexa-ai/cli` can proceed.
+- **Actual result:**
+  ```
+  An error occurred (AccessDenied) when calling the AssumeRole operation: User: arn:aws:iam::<my-account>:user/petcheck-dev
+  is not authorized to perform: sts:AssumeRole on resource: arn:aws:iam::372468808636:role/AddOn3PDeveloperToolsRead
+  ```
+  Because my side grants the permission, the denial must come from the role's trust policy on Amazon's account, i.e. my AWS account isn't trusted/enabled. The setup docs never mention that an account must be enabled or how to request it, and the troubleshooting page only says to check the user's own policy, which doesn't help here.
+- **Severity:** High (blocks installing the CLI, so no way to deploy an MCP add-on to real Alexa+)
+- **Workaround:** Asked in the hackathon Discord for account enablement. Meanwhile the project uses the officially allowed simulated Alexa+ web experience, which calls the same deployed MCP server.
+- **Suggested improvement:** (1) Document the enablement requirement and a request form at the top of the setup page; (2) let `alexa-ai` be installed from public npm and check entitlement at `alexa-ai configure` with a clear "your account isn't enabled yet, request access here" message; (3) add this exact AccessDenied message to the troubleshooting page.
+
+---
+
 <!-- Add new entries above this line, newest at the bottom. Focus on Amazon tooling:
      Alexa+ MCP Toolkit & QuickStart, Alexa developer console, AWS (Lambda, DynamoDB,
      EventBridge, Bedrock), Kiro, and the MCP SDK / Inspector. -->

@@ -95,6 +95,11 @@ export interface AuthContext {
  */
 export function authenticate(authorization: string | undefined, xApiKey: string | undefined, resource: string): AuthContext | null {
   const bearer = authorization?.replace(/^Bearer\s+/i, "").trim();
+  // Local development: no household key configured means no auth (same as before OAuth existed).
+  // Deployments always set API_KEY, so this never applies on Lambda.
+  if (!HOUSEHOLD_KEY && !oauthEnabled()) {
+    return { kind: "api-key", scopes: ["mcp:service", "mcp:tools", "mcp:resources"], household: HOUSEHOLD_ID };
+  }
   if (HOUSEHOLD_KEY && ((bearer && safeEqual(bearer, HOUSEHOLD_KEY)) || (xApiKey && safeEqual(xApiKey, HOUSEHOLD_KEY)))) {
     return { kind: "api-key", scopes: ["mcp:service", "mcp:tools", "mcp:resources"], household: HOUSEHOLD_ID };
   }
