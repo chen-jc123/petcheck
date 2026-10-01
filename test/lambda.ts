@@ -80,6 +80,13 @@ r = await http(event("OPTIONS", "/api/today"));
 assert.equal(r.statusCode, 204);
 console.log("✔ CORS preflight → 204");
 
+for (const p of ["/privacy", "/terms"]) {
+  const lr = await http(event("GET", p));
+  assert.equal(lr.statusCode, 200);
+  assert.match(lr.body!, /PetCheck (Privacy Policy|Terms of Use)/);
+}
+console.log("✔ GET /privacy and /terms → listing pages");
+
 r = await http(event("GET", "/"));
 assert.equal(r.statusCode, 200);
 assert.match(r.body!, /PetCheck/);

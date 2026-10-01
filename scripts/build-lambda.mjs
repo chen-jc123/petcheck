@@ -20,7 +20,7 @@ await build({
 });
 
 // The pages are read from disk at runtime (see src/page.ts).
-for (const f of ["household.html", "alexa.html", "demo.html"]) {
+for (const f of ["household.html", "alexa.html", "demo.html", "privacy.html", "terms.html"]) {
   copyFileSync(`src/${f}`, `dist/lambda/${f}`);
   console.log(`  dist/lambda/${f} (copied)`);
 }

@@ -1,0 +1,41 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>PetCheck · Privacy Policy</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐾</text></svg>"><style>:root{--bg:#f6f4ef;--card:#fff;--ink:#1f2328;--muted:#5b6068;--line:#e6e2d9;--accent:#3d5afe}@media (prefers-color-scheme:dark){:root{--bg:#15171a;--card:#1e2125;--ink:#eceef0;--muted:#9aa0a8;--line:#2d3137;--accent:#8c9eff}}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}main{max-width:760px;margin:0 auto;padding:32px 16px 56px}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:28px}h1{font-size:28px;margin:0 0 4px}h2{font-size:18px;margin:28px 0 8px}p,li{color:var(--muted)}strong{color:var(--ink)}a{color:var(--accent)}.meta{font-size:14px;color:var(--muted);margin-bottom:20px}table{border-collapse:collapse;width:100%;font-size:15px}td,th{border-top:1px solid var(--line);padding:8px 6px;text-align:left;vertical-align:top;color:var(--muted)}th{color:var(--ink)}footer{text-align:center;font-size:13px;color:var(--muted);margin-top:20px}</style></head>
+<body><main><div class="card">
+<h1>🐾 PetCheck Privacy Policy</h1>
+<div class="meta">Effective October 1, 2026 · Applies to the PetCheck Alexa+ add-on, its MCP server and its web pages</div>
+
+<p>PetCheck is a shared pet care log. You tell Alexa what you did for your pet ("I fed Mochi"), and PetCheck keeps a record your household can check. This policy explains what PetCheck stores and why. In short: <strong>PetCheck only stores the pet care information you give it, uses it only to run PetCheck, and never sells it.</strong></p>
+
+<h2>What PetCheck stores</h2>
+<table>
+<tr><th>Information</th><th>Example</th><th>Why</th></tr>
+<tr><td>Pets and routines</td><td>"Mochi, cat, fed at 8 AM and 6 PM"</td><td>To know what's due each day</td></tr>
+<tr><td>Care logs</td><td>"Dad fed Mochi at 7:52 AM"</td><td>To answer "has anyone fed the cat?" and catch double feedings</td></tr>
+<tr><td>Notes you choose to record</td><td>"Mochi threw up this morning"</td><td>To include in weekly summaries you ask for</td></tr>
+<tr><td>Vet appointments</td><td>"Checkup, Tuesday 10 AM"</td><td>To remind you</td></tr>
+<tr><td>Missed-task alerts</td><td>"Mochi's dinner hasn't been logged"</td><td>To remind the household and notify the owner</td></tr>
+<tr><td>Owner alert email (optional)</td><td>The address the owner chooses</td><td>To email missed-task alerts</td></tr>
+</table>
+<p>The names in care logs are the first names or labels your household uses when speaking to Alexa (for example "Dad" or "Emma"). PetCheck does <strong>not</strong> receive voice recordings, your Amazon account details, your location, or contacts. Alexa processes your voice under <a href="https://www.amazon.com/alexaprivacy">Amazon's own privacy terms</a>; PetCheck only receives the request Alexa sends to its tools.</p>
+<p>The PetCheck <strong>web demo page</strong> (a simulated Alexa for testing) works differently: your browser turns speech into text (some browsers use their maker's speech service for this), and the text is sent to PetCheck, which may use Amazon Bedrock to understand it. Amazon Bedrock doesn't use these requests to train models.</p>
+
+<h2>How it's used</h2>
+<ul>
+<li>Only to provide PetCheck: logging care, answering questions, summaries and missed-task reminders.</li>
+<li>Not sold, rented or shared for advertising. Not used to train AI models.</li>
+<li>PetCheck records and reminds; it never gives veterinary advice, and notes are never interpreted or diagnosed.</li>
+</ul>
+
+<h2>Where it's stored and how it's protected</h2>
+<p>Data is stored in Amazon Web Services (Amazon DynamoDB, US East region) and processed by AWS Lambda. Connections use HTTPS. Access requires your household key or an OAuth token issued when you link PetCheck in the Alexa app; a token only works for the household that linked it, and Alexa's service-level token cannot read household data. Missed-task emails are sent with Amazon SNS.</p>
+
+<h2>Keeping and deleting data</h2>
+<p>Care history is kept so weekly summaries work. You can unlink PetCheck in the Alexa app at any time, which stops Alexa from accessing it. To delete your household's data, email the contact below and it will be removed within 30 days.</p>
+
+<h2>Children</h2>
+<p>PetCheck is a household tool and is not directed at children under 13. It doesn't knowingly collect personal information from children beyond a first name or label a family chooses to use in a care log.</p>
+
+<h2>Changes and contact</h2>
+<p>If this policy changes, the effective date above will be updated. Questions or deletion requests: <a href="mailto:jcdufour@umich.edu">jcdufour@umich.edu</a>.</p>
+<p><a href="/terms">Terms of Use</a></p>
+</div><footer>PetCheck · built for the Amazon Alexa+ developer hackathon</footer></main></body></html>

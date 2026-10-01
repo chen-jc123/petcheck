@@ -22,7 +22,8 @@
     "test:alerts": "tsx test/alerts.ts",
     "test:assistant": "tsx test/assistant.ts",
     "test:rules": "tsx test/rules.ts",
-    "test:oauth": "tsx test/oauth.ts"
+    "test:oauth": "tsx test/oauth.ts",
+    "check:listing": "node scripts/check-listing.mjs"
   },
   "engines": {
     "node": ">=20"
