@@ -47,22 +47,28 @@
   /* Device */
   .device { display: flex; gap: 18px; align-items: center; }
   .speaker-unit { flex: none; display: flex; flex-direction: column; align-items: center; gap: 8px; width: 132px; }
-  .orb { width: 112px; height: 112px; border-radius: 50%; position: relative; display: grid; place-items: center;
-    background: radial-gradient(circle at 50% 38%, #26394a 0 30%, #172430 31% 62%, #0f171f 63% 100%); box-shadow: inset 0 3px 10px rgba(0,0,0,.7), 0 10px 30px rgba(0,0,0,.35); }
-  .orb::before { content: ""; position: absolute; inset: -5px; border-radius: 50%; padding: 5px;
-    background: conic-gradient(var(--line), var(--line)); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor; mask-composite: exclude; transition: background .3s; }
-  .orb::after { content: ""; position: absolute; inset: -14px; border-radius: 50%; opacity: 0; transition: opacity .3s;
-    background: radial-gradient(circle, rgba(46,196,243,.28), transparent 65%); }
-  .orb .glyph { font-size: 34px; opacity: .85; }
+  /* Echo-style device seen from above: a smooth dark top, a thin light ring, the PetCheck paw in the middle. */
+  .orb { width: 108px; height: 108px; border-radius: 50%; position: relative; display: grid; place-items: center;
+    background: radial-gradient(circle at 50% 50%, #1d2a36 0%, #16212b 55%, #111a22 100%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.06), inset 0 -6px 14px rgba(0,0,0,.45), 0 10px 26px rgba(0,0,0,.4); }
+  .orb::before { content: ""; position: absolute; inset: -4px; border-radius: 50%; padding: 3px;
+    background: conic-gradient(rgba(46,196,243,.35), rgba(106,92,255,.35), rgba(46,196,243,.35));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude; transition: background .3s, opacity .3s; opacity: .55; }
+  .orb::after { content: ""; position: absolute; inset: -16px; border-radius: 50%; opacity: 0; transition: opacity .3s;
+    background: radial-gradient(circle, rgba(46,196,243,.25), transparent 66%); pointer-events: none; }
+  .orb .glyph { width: 38px; height: 38px; opacity: .5; transition: opacity .3s; }
+  .orb.listening .glyph, .orb.speaking .glyph, .orb.thinking .glyph { opacity: .9; }
+  .orb.listening::before, .orb.thinking::before, .orb.speaking::before { opacity: 1; padding: 4px; }
   .orb.listening::before { background: conic-gradient(var(--ring), var(--ring)); animation: breathe 1.2s ease-in-out infinite; }
   .orb.listening::after, .orb.speaking::after { opacity: 1; }
   .orb.thinking::before { background: conic-gradient(from 0deg, var(--ring2), var(--ring), transparent 60%, var(--ring2)); animation: spin 1s linear infinite; }
   .orb.speaking::before { background: conic-gradient(var(--ring), var(--ring2), var(--ring)); animation: breathe .6s ease-in-out infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   @keyframes breathe { 50% { filter: brightness(1.6); transform: scale(1.03); } }
-  .wave { display: flex; gap: 3px; align-items: center; height: 22px; }
-  .wave i { width: 4px; height: 4px; border-radius: 2px; background: var(--line); transition: background .3s; }
+  .wave { display: flex; gap: 3px; align-items: center; justify-content: center; height: 22px; opacity: 0; transition: opacity .3s; }
+  .device[data-mode="listening"] .wave, .device[data-mode="speaking"] .wave, .device[data-mode="thinking"] .wave { opacity: 1; }
+  .wave i { width: 4px; height: 4px; border-radius: 2px; background: var(--ring); }
   .device[data-mode="listening"] .wave i, .device[data-mode="speaking"] .wave i { background: var(--ring); animation: bar .9s ease-in-out infinite; }
   .device[data-mode="speaking"] .wave i { background: linear-gradient(var(--ring), var(--ring2)); animation-duration: .6s; }
   .device[data-mode="thinking"] .wave i { background: var(--ring2); animation: dotpulse 1.2s ease-in-out infinite; }
@@ -164,7 +170,7 @@
       <div class="panel" id="device-panel">
         <div class="device" id="device">
           <div class="speaker-unit">
-            <div class="orb" id="orb"><span class="glyph">🐾</span></div>
+            <div class="orb" id="orb"><svg class="glyph" viewBox="0 0 100 100" aria-hidden="true"><g fill="#cfe8f5"><ellipse cx="24" cy="44" rx="9" ry="12" transform="rotate(-18 24 44)"/><ellipse cx="40" cy="26" rx="9.5" ry="13" transform="rotate(-6 40 26)"/><ellipse cx="60" cy="26" rx="9.5" ry="13" transform="rotate(6 60 26)"/><ellipse cx="76" cy="44" rx="9" ry="12" transform="rotate(18 76 44)"/><path d="M50 48c-14 0-28 15-28 29 0 9 7 14 15 14 6 0 9-3 13-3s7 3 13 3c8 0 15-5 15-14 0-14-14-29-28-29z"/></g></svg></div>
             <div class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
           </div>
           <div class="controls">
