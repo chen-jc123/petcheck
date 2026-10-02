@@ -143,12 +143,12 @@ PetCheck meets the Alexa+ MCP Toolkit requirements we could implement ourselves:
   and example phrases ([`alexa/listing.md`](alexa/listing.md), checked by `npm run check:listing`),
   plus [privacy policy](src/privacy.html) and [terms](src/terms.html) pages served at `/privacy` and `/terms`
 
-**Region / access note:** this project is built in the US, where Alexa+ is available. Installing the
-`alexa-ai` CLI requires assuming an Amazon developer-tools role, and that role doesn't yet trust our AWS
-account (AccessDenied, documented in [FRICTION_LOG.md](FRICTION_LOG.md) FL-008), so the add-on couldn't
-be registered with real Alexa+ before the deadline. As the rules allow, the demo uses the **simulated
-Alexa+** web experience, which calls the same deployed MCP server through a real MCP client. Once access
-is granted, `alexa-ai new mcp --mcp-server-url <url>/mcp` plus the materials in `alexa/` is all that's left.
+**Why the demo uses a simulated Alexa+:** the Alexa+ add-on developer tools (`alexa-ai` CLI) are in private
+preview and not available to hackathon participants (confirmed by Amazon's Chief Alexa Evangelist on the
+hackathon Discord; our AccessDenied attempt is documented in [FRICTION_LOG.md](FRICTION_LOG.md) FL-008). As the
+rules allow, the demo uses a **simulated Alexa+** web experience that calls the same deployed MCP server through
+a real MCP client. Everything we could build ahead of access is done: once the toolkit opens up,
+`alexa-ai new mcp --mcp-server-url <url>/mcp` plus the OAuth endpoints and the materials in `alexa/` is all that's left.
 
 ## AWS services used
 

@@ -30,7 +30,7 @@ SCENES=(
   "Now it's seven P M, and nobody fed Biscuit. Every five minutes, an Event Bridge schedule checks the routine. After thirty minutes the house gets a reminder. After an hour, the owner gets an email, wherever they are."
   "Mom asks how Mochi's week went: meals, missed tasks, anything the family noted, and the next vet visit. Useful to bring to an appointment."
   "And PetCheck never plays vet. It records and reminds, and anything medical goes to your veterinarian."
-  "Under the hood, PetCheck is an M C P server using streamable H T T P, running statelessly on A W S Lambda, with Dynamo D B for storage, Event Bridge Scheduler and S N S for alerts, and Amazon Bedrock to understand speech, with a built-in fallback. It's ready for real Alexa plus. O-Auth account linking and the listing materials are done. Our account is still waiting on Amazon toolkit access, so this demo uses the simulated Alexa plus, which calls the same live server."
+  "Under the hood, PetCheck is an M C P server using streamable H T T P, running statelessly on A W S Lambda, with Dynamo D B for storage, Event Bridge Scheduler and S N S for alerts, and Amazon Bedrock to understand speech, with a built-in fallback. It's ready for real Alexa plus. O-Auth account linking and the listing materials are done. Alexa plus add-on tools are still in private preview, so this demo uses a simulated Alexa plus, which calls the same live server."
   "No app to install, and nothing to remember to open. You just say what you did. PetCheck."
 )
 

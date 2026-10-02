@@ -171,8 +171,8 @@ Entries are written at the moment the friction happens, not reconstructed afterw
   ```
   Because my side grants the permission, the denial must come from the role's trust policy on Amazon's account, i.e. my AWS account isn't trusted/enabled. The setup docs never mention that an account must be enabled or how to request it, and the troubleshooting page only says to check the user's own policy, which doesn't help here.
 - **Severity:** High (blocks installing the CLI, so no way to deploy an MCP add-on to real Alexa+)
-- **Workaround:** Asked in the hackathon Discord for account enablement. Meanwhile the project uses the officially allowed simulated Alexa+ web experience, which calls the same deployed MCP server.
-- **Suggested improvement:** (1) Document the enablement requirement and a request form at the top of the setup page; (2) let `alexa-ai` be installed from public npm and check entitlement at `alexa-ai configure` with a clear "your account isn't enabled yet, request access here" message; (3) add this exact AccessDenied message to the troubleshooting page.
+- **Workaround:** Asked in the hackathon Discord. **Resolution (2026-10-01):** Amazon's Chief Alexa Evangelist replied that "the addon developer tools are in private preview and are not available to hackathon participants." The project therefore uses the officially allowed simulated Alexa+ web experience, which calls the same deployed MCP server; OAuth 2.1 account linking and listing materials are ready for when access opens.
+- **Suggested improvement:** (1) State "private preview: invitation only" at the top of the setup page (and in hackathon materials, so participants don't spend time on it), with a request form; (2) let `alexa-ai` be installed from public npm and check entitlement at `alexa-ai configure` with a clear "your account isn't enabled yet, request access here" message; (3) add this exact AccessDenied message to the troubleshooting page.
 
 ---
 
