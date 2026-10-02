@@ -25,7 +25,8 @@
     "test:oauth": "tsx test/oauth.ts",
     "check:listing": "node scripts/check-listing.mjs",
     "demo": "ASSISTANT_ENGINE=rules DEMO_TODAY=1 tsx src/server.ts",
-    "db:demo": "tsx scripts/db.ts demo"
+    "db:demo": "tsx scripts/db.ts demo",
+    "narration:polly": "bash scripts/make-narration-polly.sh"
   },
   "engines": {
     "node": ">=20"

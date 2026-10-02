@@ -76,6 +76,21 @@ r = await http(event("POST", "/api/check-missed", { time: "7pm" }, auth));
 assert.equal(r.statusCode, 400);
 console.log("✔ bad time → 400:", JSON.parse(r.body!).error);
 
+r = await http(event("POST", "/api/log", { pet: "Biscuit", activity: "walk", by: "Mom" }, auth));
+assert.equal(r.statusCode, 200, r.body);
+const ql = JSON.parse(r.body!);
+r = await http(event("POST", "/api/log", { pet: "Biscuit", activity: "walk", by: "Emma" }, auth));
+assert.equal(JSON.parse(r.body!).status, "needs_confirmation");
+r = await http(event("POST", "/api/log", { pet: "Biscuit", activity: "nap" }, auth));
+assert.equal(r.statusCode, 400);
+console.log("✔ POST /api/log quick-log:", ql.message, "→ duplicate caught → bad activity 400");
+
+r = await http(event("GET", "/api/today", undefined, auth));
+const v2 = JSON.parse(r.body!);
+assert.equal(v2.pets[0].week.days.length, 7);
+assert.ok(Array.isArray(v2.helpers) && typeof v2.nowMinutes === "number");
+console.log("✔ /api/today includes 7-day history, streaks and helpers:", v2.pets.map((p: { name: string; week: { streak: number } }) => `${p.name} streak ${p.week.streak}`).join(", "));
+
 r = await http(event("OPTIONS", "/api/today"));
 assert.equal(r.statusCode, 204);
 console.log("✔ CORS preflight → 204");

@@ -42,8 +42,8 @@
   @media (max-width: 760px) {
     .grid { display: flex; flex-direction: column; align-items: stretch; }
     .col { display: contents; }
-    #hero { order: 1; } #alerts-card { order: 2; } #pets-card { order: 3; } #activity-card { order: 4; }
-    #notes-card { order: 5; } #visits-card { order: 6; } #demo { order: 7; }
+    #hero { order: 1; } #alerts-card { order: 2; } #timeline-card { order: 3; } #pets-card { order: 4; }
+    #helpers-card { order: 5; } #activity-card { order: 6; } #notes-card { order: 7; } #visits-card { order: 8; } #demo { order: 9; }
   }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; box-shadow: var(--shadow); }
   .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 0 0 10px; font-weight: 650;
@@ -85,6 +85,58 @@
   .slot .txt { min-width: 0; }
   .slot .what { font-weight: 600; font-size: 14px; line-height: 1.25; }
   .slot .when { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .slot .act { margin-left: auto; flex: none; border: none; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 700;
+    background: var(--accent); color: #fff; cursor: pointer; white-space: nowrap; }
+  .slot .act:hover { filter: brightness(1.08); }
+  .slot .act:disabled { opacity: .5; }
+  .slot.confirming { flex-wrap: wrap; grid-column: 1 / -1; }
+  .confirm { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; margin-top: 6px; }
+  .confirm span { flex-basis: 100%; }
+  .confirm button { padding: 4px 10px; font-size: 12px; border-radius: 999px; }
+  .whoami { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 12px; color: var(--muted); display: flex; gap: 4px; align-items: center; }
+  .whoami select { font: inherit; font-weight: 650; color: var(--ink); background: var(--soft); border: 1px solid var(--line); border-radius: 999px; padding: 2px 6px; }
+
+  /* 7-day history */
+  .week { display: flex; align-items: flex-end; gap: 10px; margin: 0 0 10px; }
+  .week .cells { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; flex: 1; max-width: 260px; }
+  .week .cell { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 10px; color: var(--muted); }
+  .week .sq { width: 100%; height: 14px; border-radius: 4px; background: var(--line); }
+  .week .sq.full { background: var(--done); }
+  .week .sq.part { background: var(--due); opacity: .85; }
+  .week .sq.none { background: var(--late); opacity: .8; }
+  .week .sq.untracked { background: transparent; border: 1px dashed var(--line); }
+  .week .cell.today .sq { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .week .cell.today { color: var(--ink); font-weight: 700; }
+  .streak { font-size: 12px; font-weight: 700; color: var(--due); white-space: nowrap; }
+  .streak.muted { color: var(--muted); font-weight: 500; }
+
+  /* Today timeline */
+  .tl { position: relative; padding: 4px 0 0 34px; }
+  .tl-hours { position: relative; height: 16px; margin-bottom: 4px; }
+  .tl-hours span { position: absolute; transform: translateX(-50%); font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .tl-lane { position: relative; height: 30px; margin: 4px 0; }
+  .tl-lane::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 4px; margin-top: -2px; border-radius: 2px; background: var(--soft); border: 1px solid var(--line); }
+  .tl-lane .past { position: absolute; left: 0; top: 50%; height: 4px; margin-top: -2px; border-radius: 2px; background: color-mix(in srgb, var(--accent) 35%, transparent); }
+  .tl-pet { position: absolute; left: -34px; top: 3px; width: 24px; height: 24px; border-radius: 50%; }
+  .tl-dot { position: absolute; top: 50%; width: 24px; height: 24px; margin: -12px 0 0 -12px; border-radius: 50%; display: grid; place-items: center;
+    font-size: 12px; background: var(--card); border: 2px solid var(--soon); box-shadow: var(--shadow); cursor: default; }
+  .tl-dot.done { border-color: var(--done); background: var(--done-bg); }
+  .tl-dot.due { border-color: var(--due); background: var(--due-bg); }
+  .tl-dot.overdue { border-color: var(--late); background: var(--late-bg); animation: throb 1.6s ease-in-out infinite; }
+  @keyframes throb { 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--late) 25%, transparent); } }
+  .tl-now { position: absolute; top: 18px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--accent); border-radius: 1px; }
+  .tl-now span { position: absolute; bottom: -16px; left: 50%; transform: translateX(-50%); font-size: 10px; font-weight: 750; color: #fff;
+    background: var(--accent); padding: 1px 6px; border-radius: 999px; white-space: nowrap; }
+  .tl-legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11px; color: var(--muted); margin-top: 20px; }
+  .tl-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; border: 2px solid; }
+
+  /* Helpers */
+  .helper { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+  .helper .ini { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-weight: 750; font-size: 13px; color: #fff; flex: none; }
+  .helper .nm { width: 52px; font-weight: 600; font-size: 14px; }
+  .helper .bar { flex: 1; height: 8px; border-radius: 4px; background: var(--soft); overflow: hidden; }
+  .helper .bar i { display: block; height: 100%; border-radius: 4px; transition: width .6s; }
+  .helper .n { width: 52px; text-align: right; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
   .slot .mark { margin-left: auto; font-size: 11px; font-weight: 750; text-transform: uppercase; letter-spacing: .04em; flex: none; }
   .slot.done { background: var(--done-bg); border-color: transparent; } .slot.done .mark { color: var(--done); }
   .slot.due { background: var(--due-bg); border-color: transparent; } .slot.due .mark { color: var(--due); }
@@ -165,12 +217,14 @@
     <div class="grid">
       <div class="col">
         <div class="card" id="hero"><span class="emoji" id="hero-emoji">🐾</span><div><div class="big" id="hero-big">Loading…</div><div class="sub" id="hero-sub"></div></div><div class="stat"><b id="hero-done">–</b><span>done today</span></div></div>
-        <div class="card" id="pets-card"><h2>Today</h2><div class="pets" id="pets"></div></div>
+        <div class="card" id="timeline-card"><h2>Today's timeline</h2><div id="timeline"></div></div>
+        <div class="card" id="pets-card"><h2>Pets <span class="whoami"><label for="me">Logging as</label><select id="me"><option>Mom</option><option>Dad</option><option>Emma</option></select></span></h2><div class="pets" id="pets"></div></div>
         <div class="card" id="notes-card" hidden><h2>Notes today</h2><div id="notes"></div></div>
         <div class="card" id="visits-card" hidden><h2>Upcoming vet visits</h2><div id="visits"></div></div>
       </div>
       <div class="col">
         <div class="card" id="alerts-card"><h2>Alerts <span class="count" id="alerts-count"></span></h2><div id="alerts"></div></div>
+        <div class="card" id="helpers-card" hidden><h2>This week's helpers</h2><div id="helpers"></div></div>
         <div class="card" id="activity-card"><h2>Activity</h2><ul class="feed" id="feed"></ul></div>
         <details class="demo card" id="demo">
           <summary>Demo controls</summary>
@@ -200,7 +254,9 @@
   var KEY_STORE = "petcheck.key";
   var LOCALE = "en-US"; // PetCheck speaks English; keep dates/times consistent with Alexa's replies
   var POLL_MS = 4000;
-  var state = { key: null, demoTime: null, seenEvents: null, seenAlerts: null, slotStates: null, complete: {}, timer: null };
+  var state = { key: null, demoTime: null, seenEvents: null, seenAlerts: null, slotStates: null, complete: {}, timer: null,
+                pending: null, busy: {}, last: null };
+  var ME_STORE = "petcheck.me";
 
   function $(id) { return document.getElementById(id); }
   function el(tag, cls, text) {
@@ -226,6 +282,11 @@
                water: "refilled water for", groom: "groomed", other: "cared for" };
   var ICON = { feed: "🍽️", walk: "🦮", meds: "💊", litter: "🧹", water: "💧", groom: "🪮", other: "🐾" };
   var MARK = { done: "Done", due: "Due now", overdue: "Overdue", upcoming: "Later" };
+  var ACT_LABEL = { feed: "Fed", walk: "Walked", meds: "Given", litter: "Cleaned", water: "Filled", groom: "Done", other: "Done" };
+  var PERSON_COLORS = ["#3d5afe", "#e57f9a", "#2fa36b", "#c27a07", "#7e57c2", "#00838f"];
+  function personColor(name) { var h = 0; for (var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0; return PERSON_COLORS[h % PERSON_COLORS.length]; }
+  function me() { try { return localStorage.getItem(ME_STORE) || "Mom"; } catch (e) { return "Mom"; } }
+  function minToLabel(m) { var h = Math.floor(m / 60), ampm = h < 12 || h === 24 ? "AM" : "PM", h12 = h % 12 === 0 ? 12 : h % 12; return h12 + " " + ampm; }
 
   // --- Original pet avatars (inline SVG) --------------------------------------
   // [fur, background] per species, so a dog never comes out pink.
@@ -270,7 +331,9 @@
   function avatarEl(name, species, size, cls) {
     var span = el("span", cls);
     span.innerHTML = avatarSvg(name, species || speciesByPet[name] || "", size);
-    return span.firstChild;
+    var svg = span.firstChild;
+    if (cls) svg.setAttribute("class", cls);
+    return svg;
   }
 
   function ringEl(done, total) {
@@ -309,6 +372,101 @@
   }
 
   // --- Rendering -----------------------------------------------------------
+  // --- 7-day history -------------------------------------------------------
+  function weekEl(w) {
+    var row = el("div", "week");
+    var cells = el("div", "cells");
+    w.days.forEach(function (d, i) {
+      var day = new Date(d.date + "T12:00:00");
+      var cell = el("div", "cell" + (i === w.days.length - 1 ? " today" : ""));
+      var cls = !d.tracked ? "untracked" : d.expected === 0 ? "" : d.done >= d.expected ? "full" : d.done === 0 ? "none" : "part";
+      var sq = el("div", "sq " + cls);
+      var nameDay = day.toLocaleDateString(LOCALE, { weekday: "long" });
+      cell.title = !d.tracked ? nameDay + ": not tracked yet" : d.expected === 0 ? nameDay + ": nothing due yet" : nameDay + ": " + d.done + " of " + d.expected + " done";
+      cell.appendChild(sq);
+      cell.appendChild(el("span", null, i === w.days.length - 1 ? "Today" : day.toLocaleDateString(LOCALE, { weekday: "narrow" })));
+      cells.appendChild(cell);
+    });
+    row.appendChild(cells);
+    row.appendChild(w.streak >= 2 ? el("span", "streak", "🔥 " + w.streak + "-day streak") : el("span", "streak muted", "Last 7 days"));
+    return row;
+  }
+
+  // --- Today timeline --------------------------------------------------------
+  function renderTimeline(v) {
+    var box = $("timeline"); box.textContent = "";
+    var times = [];
+    v.pets.forEach(function (p) { p.slots.forEach(function (s) { var t = s.time.split(":"); times.push(+t[0] * 60 + +t[1]); }); });
+    if (!times.length) { box.appendChild(el("p", "empty", "No routines yet.")); return; }
+    var start = Math.min(6 * 60, Math.floor((Math.min.apply(null, times) - 30) / 60) * 60);
+    var end = Math.max(22 * 60, Math.ceil((Math.max.apply(null, times) + 30) / 60) * 60);
+    var pct = function (m) { return Math.max(0, Math.min(100, (m - start) / (end - start) * 100)); };
+    var tl = el("div", "tl");
+    var hours = el("div", "tl-hours");
+    for (var h = start; h <= end; h += 180) { var lab = el("span", null, minToLabel(h)); lab.style.left = pct(h) + "%"; hours.appendChild(lab); }
+    tl.appendChild(hours);
+    var nowM = typeof v.nowMinutes === "number" ? v.nowMinutes : null;
+    v.pets.forEach(function (p) {
+      var lane = el("div", "tl-lane");
+      lane.appendChild(avatarEl(p.name, p.species, 24, "tl-pet"));
+      if (nowM !== null) { var past = el("div", "past"); past.style.width = pct(nowM) + "%"; lane.appendChild(past); }
+      p.slots.forEach(function (s) {
+        var t = s.time.split(":"), m = +t[0] * 60 + +t[1];
+        var dot = el("div", "tl-dot " + s.state, ICON[s.activity] || "🐾");
+        dot.style.left = pct(m) + "%";
+        dot.title = p.name + " · " + cap(s.label) + " · " + hhmmSpoken(s.time) + " · " +
+          (s.state === "done" ? "done by " + s.doneBy + " at " + spokenTime(s.doneAt) : MARK[s.state].toLowerCase());
+        lane.appendChild(dot);
+      });
+      tl.appendChild(lane);
+    });
+    if (nowM !== null && nowM >= start && nowM <= end) {
+      var line = el("div", "tl-now"); line.style.left = "calc(34px + (100% - 34px) * " + (pct(nowM) / 100) + ")";
+      line.appendChild(el("span", null, state.demoTime ? hhmmSpoken(state.demoTime) : "Now"));
+      tl.appendChild(line);
+    }
+    box.appendChild(tl);
+    var legend = el("div", "tl-legend");
+    [["Done", "var(--done)"], ["Due now", "var(--due)"], ["Overdue", "var(--late)"], ["Later", "var(--soon)"]].forEach(function (x) {
+      var item = el("span"); var i = el("i"); i.style.borderColor = x[1]; item.appendChild(i); item.appendChild(document.createTextNode(x[0])); legend.appendChild(item);
+    });
+    box.appendChild(legend);
+  }
+
+  // --- Helpers board -----------------------------------------------------------
+  function renderHelpers(v) {
+    var hs = v.helpers || [];
+    $("helpers-card").hidden = !hs.length;
+    var box = $("helpers"); box.textContent = "";
+    var max = hs.length ? hs[0].count : 1;
+    hs.slice(0, 6).forEach(function (h, i) {
+      var row = el("div", "helper");
+      var ini = el("span", "ini", h.name.charAt(0).toUpperCase()); ini.style.background = personColor(h.name);
+      row.appendChild(ini);
+      row.appendChild(el("span", "nm", (i === 0 ? "🏆 " : "") + h.name));
+      var bar = el("div", "bar"); var fill = el("i"); fill.style.width = Math.round(h.count / max * 100) + "%"; fill.style.background = personColor(h.name);
+      bar.appendChild(fill); row.appendChild(bar);
+      row.appendChild(el("span", "n", h.count + (h.count === 1 ? " task" : " tasks")));
+      box.appendChild(row);
+    });
+  }
+
+  // --- Quick log (same logic as the log_care tool, incl. duplicate check) -----
+  function quickLog(pet, slot, key, confirm) {
+    state.busy[key] = true;
+    if (state.last) render(state.last);
+    var body = { pet: pet, activity: slot.activity, by: me(), confirm: confirm };
+    if (state.demoTime) body.time = state.demoTime;
+    api("POST", "/log", body).then(function (r) {
+      state.pending = r.status === "needs_confirmation" ? { key: key, message: r.message } : null;
+    }).catch(function (e) {
+      state.pending = { key: key, message: "Couldn't log it: " + e.message };
+    }).then(function () {
+      delete state.busy[key];
+      return refresh();
+    });
+  }
+
   function renderHero(v) {
     var all = [], done = 0;
     v.pets.forEach(function (p) { p.slots.forEach(function (s) { all.push({ pet: p.name, s: s }); if (s.state === "done") done++; }); });
@@ -337,7 +495,10 @@
     var d = new Date(v.date + "T12:00:00");
     $("date").textContent = d.toLocaleDateString(LOCALE, { weekday: "long", month: "long", day: "numeric" });
     v.pets.forEach(function (p) { speciesByPet[p.name] = p.species; });
+    state.last = v;
     renderHero(v);
+    renderTimeline(v);
+    renderHelpers(v);
 
     // Pets
     var prevSlots = state.slotStates, nextSlots = {};
@@ -367,6 +528,7 @@
       head.appendChild(who);
       head.appendChild(ringEl(done, p.slots.length));
       card.appendChild(head);
+      if (p.week) card.appendChild(weekEl(p.week));
 
       var list = el("div", "slots");
       p.slots.forEach(function (s) {
@@ -378,9 +540,30 @@
         row.appendChild(el("span", "icon", ICON[s.activity] || "🐾"));
         var txt = el("div", "txt");
         txt.appendChild(el("div", "what", cap(s.label)));
+        var actionable = s.state === "due" || s.state === "overdue";
         txt.appendChild(el("div", "when", s.state === "done" ? s.doneBy + " · " + spokenTime(s.doneAt) : hhmmSpoken(s.time)));
         row.appendChild(txt);
-        row.appendChild(el("span", "mark", s.state === "done" ? "✓" : MARK[s.state]));
+        if (actionable) {
+          var btn = el("button", "act", "✓ " + (ACT_LABEL[s.activity] || "Done"));
+          btn.type = "button";
+          btn.disabled = !!state.busy[key];
+          btn.title = "Log it as " + me();
+          btn.onclick = (function (pet, slot, k) { return function () { quickLog(pet, slot, k, false); }; })(p.name, s, key);
+          row.appendChild(btn);
+        } else {
+          row.appendChild(el("span", "mark", s.state === "done" ? "✓" : MARK[s.state]));
+        }
+        if (state.pending && state.pending.key === key) {
+          row.classList.add("confirming");
+          var c = el("div", "confirm");
+          c.appendChild(el("span", null, state.pending.message));
+          var yes = el("button", "primary", "Log anyway"); yes.type = "button";
+          yes.onclick = (function (pet, slot, k) { return function () { quickLog(pet, slot, k, true); }; })(p.name, s, key);
+          var no = el("button", null, "Cancel"); no.type = "button";
+          no.onclick = function () { state.pending = null; if (state.last) render(state.last); };
+          c.appendChild(yes); c.appendChild(no);
+          row.appendChild(c);
+        }
         list.appendChild(row);
       });
       card.appendChild(list);
@@ -491,6 +674,8 @@
       .then(function () { btn.disabled = false; });
   };
   $("forget-key").onclick = function () { logout(); };
+  $("me").value = me();
+  $("me").onchange = function () { try { localStorage.setItem(ME_STORE, this.value); } catch (e) {} if (state.last) render(state.last); };
 
   // --- Login ---------------------------------------------------------------
   $("login-form").onsubmit = function (ev) {

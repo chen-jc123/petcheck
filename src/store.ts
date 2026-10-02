@@ -738,9 +738,51 @@ export function todayAlerts(): (Alert & { resolved: boolean })[] {
     .map((a) => ({ ...a, resolved: doneSlots.has(`${a.petId}|${a.slot}`) }));
 }
 
+/**
+ * Last 7 days for one pet (oldest first): how many routine tasks were due and done
+ * each day (today counts only tasks already past due or done), plus the current
+ * streak of fully completed days. Today only extends the streak once it's complete.
+ */
+export function petWeek(pet: Pet) {
+  const dates = lastNLocalDates(7);
+  const today = dates[dates.length - 1];
+  const nowMin = localParts(now()).minutes;
+  const days = dates.map((date) => {
+    if (date < pet.createdOn) return { date, done: 0, expected: 0, tracked: false };
+    const matches = matchEvents(pet.routine, eventsOn(pet.id, date));
+    let done = 0;
+    let expected = 0;
+    pet.routine.forEach((r, i) => {
+      if (date === today && !matches[i] && nowMin < hhmmToMinutes(r.time) + OVERDUE_GRACE_MIN) return;
+      expected++;
+      if (matches[i]) done++;
+    });
+    return { date, done, expected, tracked: true };
+  });
+  const todayComplete = matchEvents(pet.routine, eventsOn(pet.id, today)).every(Boolean) && pet.routine.length > 0;
+  let streak = todayComplete ? 1 : 0;
+  for (let i = days.length - 2; i >= 0; i--) {
+    const d = days[i];
+    if (!d.tracked || d.expected === 0 || d.done < d.expected) break;
+    streak++;
+  }
+  return { days, streak };
+}
+
+/** Who logged how many tasks in the last 7 days, most first. */
+export function weekHelpers(): { name: string; count: number }[] {
+  const week = new Set(lastNLocalDates(7));
+  const counts = new Map<string, number>();
+  for (const e of db.events) {
+    if (!week.has(localParts(new Date(e.at)).date)) continue;
+    counts.set(e.by, (counts.get(e.by) ?? 0) + 1);
+  }
+  return [...counts.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+}
+
 /** Everything the household page needs for today, in one call. */
 export function todayView() {
-  const { date } = localParts(now());
+  const { date, minutes: nowMinutes } = localParts(now());
   const events = db.events
     .filter((e) => localParts(new Date(e.at)).date === date)
     .sort((a, b) => b.at.localeCompare(a.at))
@@ -750,7 +792,9 @@ export function todayView() {
     .map((n) => ({ ...n, pet: db.pets.find((p) => p.id === n.petId)?.name ?? "?" }));
   return {
     date,
-    pets: db.pets.map((p) => ({ name: p.name, species: p.species, slots: todaySlots(p) })),
+    nowMinutes,
+    pets: db.pets.map((p) => ({ name: p.name, species: p.species, slots: todaySlots(p), week: petWeek(p) })),
+    helpers: weekHelpers(),
     events,
     notes,
     alerts: todayAlerts(),

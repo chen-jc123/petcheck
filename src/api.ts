@@ -3,6 +3,8 @@
 //   GET  /api/today[?time=HH:MM]          everything the household page shows for today
 //   POST /api/check-missed {time?: HH:MM} run the missed-task check now (demo / manual)
 //   POST /api/assistant {text, speaker, history}  simulated Alexa+ turn (Bedrock + MCP client)
+//   POST /api/log {pet, activity, by, confirm?, time?}  quick-log from the household page (same
+//                                         logic as the log_care tool, including the duplicate check)
 //
 // `time` pretends it's that time today, so the demo can jump to 6:30 PM and run
 // the *real* check logic. Both endpoints require the API key when one is set.
@@ -12,7 +14,7 @@
 import { localParts, localToDate, now, setDemoOffset } from "./clock.js";
 import { storage } from "./mcp.js";
 import { notifyOwner } from "./notify.js";
-import { PetCheckError, checkMissedTasks, todayView, type Alert } from "./store.js";
+import { ACTIVITIES, PetCheckError, checkMissedTasks, logCare, todayView, type Activity, type Alert } from "./store.js";
 import { runAssistant, type AssistantRequest } from "./assistant.js";
 
 export interface ApiResult {
@@ -70,6 +72,18 @@ export async function handleApi(
     if (method === "POST" && p === "/check-missed") {
       const time = (body as { time?: string } | undefined)?.time ?? query.time;
       return { status: 200, body: await runMissedCheck(time) };
+    }
+    if (method === "POST" && p === "/log") {
+      const b = (body ?? {}) as { pet?: string; activity?: string; by?: string; confirm?: boolean; time?: string };
+      if (!b.activity || !(ACTIVITIES as readonly string[]).includes(b.activity)) {
+        throw new PetCheckError(`activity should be one of ${ACTIVITIES.join(", ")}`);
+      }
+      const r = await storage.run(
+        atTime(b.time, () =>
+          logCare({ pet: b.pet, activity: b.activity as Activity, by: b.by?.slice(0, 40), confirm: Boolean(b.confirm) }),
+        ),
+      );
+      return { status: 200, body: r };
     }
     if (method === "POST" && p === "/assistant") {
       if (!ctx.mcpUrl) return { status: 500, body: { error: "MCP URL unknown" } };
