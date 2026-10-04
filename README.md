@@ -6,7 +6,10 @@ PetCheck is an **MCP server** (spec 2025-11-25, Streamable HTTP) running on **AW
 DynamoDB storage, scheduled missed-task alerts, OAuth 2.1 for Alexa+ account linking, a live household
 page, and a **simulated Alexa+** web experience that talks to the server through a real MCP client.
 
-![PetCheck demo: simulated Alexa+ and the household page](docs/screenshots/household-page.png)
+![PetCheck household page: status banner, today's timeline, pet cards with 7-day history and quick-log buttons, alerts, helpers and activity](docs/screenshots/household-page.png)
+
+*The live household page: what's done, what's overdue, the alerts PetCheck raised, a 7-day history with
+streaks for each pet, one-tap "✓ Fed / Walked" logging, and who helped most this week.*
 
 ## The problem
 
@@ -51,7 +54,7 @@ The **MCP traffic** panel shows every HTTP request the assistant makes to `/mcp`
 (`initialize` → `tools/list` → `tools/call log_care`), with full JSON-RPC bodies.
 
 `npm run demo` uses in-memory data and PetCheck's built-in rules engine, so it runs anywhere.
-The deployed version uses DynamoDB and Amazon Bedrock (see below).
+The deployed version uses DynamoDB, and Amazon Bedrock once the account is approved (until then the built-in rules engine answers; see below).
 
 ## How it works
 
@@ -180,11 +183,14 @@ which is git-ignored. Add `ALERT_EMAIL=you@example.com` there for owner emails.
 |---|---|
 | `/` | Household page |
 | `/alexa` | Simulated Alexa+ |
-| `/demo` | Split screen: simulated Alexa+ and the household page, for recording |
+| `/demo` | Split screen: simulated Alexa+ and the household page, for recording. Add `?time=17:40` to run both sides on a demo clock (also works on `/` and `/alexa`) |
 | `/mcp` | MCP endpoint (household key via `x-api-key` / `Authorization: Bearer`, or an OAuth token) |
-| `/api/today`, `/api/check-missed`, `/api/assistant` | JSON API used by the pages |
+| `/api/today`, `/api/check-missed`, `/api/log`, `/api/assistant` | JSON API used by the pages |
 | `/.well-known/oauth-authorization-server`, `/oauth/authorize`, `/oauth/token` | OAuth 2.1 for Alexa+ |
 | `/privacy`, `/terms`, `/health` | Listing pages and a health check |
+
+To record the demo video at any time of day: `npm run db:demo -- 17:35` resets the household as if it
+were 5:35 PM, then open `/demo?time=17:40`.
 
 Other commands: `npm run logs` (follow the Lambda logs), `npm run db:status`, `npm run dev:dynamo`
 (local server against DynamoDB), `npm run inspector` (MCP Inspector; connect with Streamable HTTP to

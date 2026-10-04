@@ -22,7 +22,7 @@ SCENES=(
   "Now it's 7 PM, and nobody fed Biscuit. Every five minutes, an EventBridge schedule checks the routine. After thirty minutes, the house gets a reminder. After an hour, the owner gets an email, wherever they are."
   "Mom asks how Mochi's week went: meals, missed tasks, anything the family noted, and the next vet visit. Useful to bring to an appointment."
   "And PetCheck never plays vet. It records and reminds, and anything medical goes to your veterinarian."
-  "Under the hood, PetCheck is an MCP server using streamable HTTP, running statelessly on AWS Lambda, with DynamoDB for storage, EventBridge Scheduler and SNS for alerts, and Amazon Bedrock to understand speech, with a built-in fallback. Even this narration is Amazon Polly. It's ready for real Alexa Plus: O-Auth account linking and the listing materials are done. Alexa Plus add-on tools are still in private preview, so this demo uses a simulated Alexa Plus, which calls the same live server."
+  "Under the hood, PetCheck is an MCP server using streamable HTTP, running statelessly on AWS Lambda, with DynamoDB for storage, and EventBridge Scheduler and SNS for alerts. Amazon Bedrock is built in to understand speech, but our account is still waiting for Bedrock approval, so this demo runs on PetCheck's built-in rules fallback. Even this narration is Amazon Polly. PetCheck is ready for real Alexa Plus, with O-Auth account linking and the listing materials done. The Alexa Plus toolkit is still in private preview, so this demo uses a simulated Alexa Plus that calls the same live server."
   "No app to install, and nothing to remember to open. You just say what you did. PetCheck."
 )
 

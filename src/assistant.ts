@@ -189,6 +189,8 @@ export async function runAssistant(
   opts: {
     mcpUrl: string;
     apiKey?: string;
+    /** Demo clock ("17:40"), forwarded to the MCP server as x-petcheck-demo-time. */
+    demoTime?: string;
     /** Force this model function for the whole turn (tests). */
     converse?: ConverseFn;
     /** Stand-in for Bedrock that still gets the auto-fallback behaviour (tests). */
@@ -228,7 +230,12 @@ export async function runAssistant(
   // 1. Connect to the PetCheck MCP server over HTTP (initialize + tools/list).
   const trace: TraceEntry[] = [];
   const transport = new StreamableHTTPClientTransport(new URL(opts.mcpUrl), {
-    requestInit: { headers: opts.apiKey ? { "x-api-key": opts.apiKey } : {} },
+    requestInit: {
+      headers: {
+        ...(opts.apiKey ? { "x-api-key": opts.apiKey } : {}),
+        ...(opts.demoTime ? { "x-petcheck-demo-time": opts.demoTime } : {}),
+      },
+    },
     fetch: tracedFetch(trace),
   });
   const client = new Client({ name: "petcheck-alexa-sim", version: "0.1.0" });

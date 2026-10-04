@@ -103,6 +103,19 @@ try {
   assert.equal(r.toolCalls.length, 0);
   console.log("✔ “Can dogs eat grapes?” →", r.reply);
 
+  // 8. Demo clock: the whole turn, including the MCP tool call on the server, runs at 5:40 PM.
+  const { withDemoTime, localParts } = await import("../src/clock.js");
+  r = await withDemoTime("17:40", () =>
+    runAssistant({ text: "I fed Biscuit", speaker: "Mom", time: "17:40" } as never, { mcpUrl, apiKey: "test", bedrock: blocked, demoTime: "17:40" }),
+  );
+  assert.match(r.reply, /Mom fed Biscuit/);
+  const today = await (await fetch(mcpUrl.replace("/mcp", "/api/today?time=17:45"), { headers: { "x-api-key": "test" } })).json();
+  const ev = today.events.find((e: { by: string; at: string }) => e.by === "Mom" && localParts(new Date(e.at)).minutes === 17 * 60 + 40);
+  assert.ok(ev, "the log is stamped 5:40 PM, not the real time");
+  const dinner = today.pets.find((p: { name: string }) => p.name === "Biscuit").slots.find((s: { label: string }) => s.label === "dinner");
+  assert.equal(dinner.state, "done");
+  console.log("✔ demo clock 5:40 PM → Biscuit's dinner logged at 5:40 PM:", r.reply);
+
   console.log("\nAll assistant checks passed.");
 } finally {
   server.close();

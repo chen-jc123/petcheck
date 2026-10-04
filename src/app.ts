@@ -5,6 +5,7 @@ import { METHOD_NOT_ALLOWED, apiKeyOk, buildServer, healthInfo } from "./mcp.js"
 import { authenticate, handleOAuth, mcpAccessError } from "./oauth.js";
 import { CORS_HEADERS, handleApi } from "./api.js";
 import { PAGES, page } from "./page.js";
+import { isDemoTime, withDemoTime } from "./clock.js";
 
 export { storage } from "./mcp.js";
 
@@ -45,7 +46,8 @@ app.post("/mcp", async (req, res) => {
   });
   try {
     await server.connect(transport);
-    await transport.handleRequest(req, res, req.body);
+    const demo = req.header("x-petcheck-demo-time");
+    await withDemoTime(isDemoTime(demo) ? demo : undefined, () => transport.handleRequest(req, res, req.body));
   } catch (err) {
     console.error("MCP request failed:", err);
     if (!res.headersSent) {

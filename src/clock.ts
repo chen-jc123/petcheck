@@ -4,12 +4,17 @@
 // The demo offset lets the simulated Alexa+ page "fast-forward" the clock
 // (e.g. jump to 6:30 PM) so the real missed-task logic runs during the video.
 
+import { AsyncLocalStorage } from "node:async_hooks";
+
 let demoOffsetMs = 0;
+// Per-request demo offset: the simulated Alexa+ sends its demo time with each
+// request, so concurrent requests can't leak a fake clock into each other.
+const scopedOffset = new AsyncLocalStorage<number>();
 
 export const HOUSEHOLD_TZ = process.env.HOUSEHOLD_TZ ?? "America/Detroit";
 
 export function now(): Date {
-  return new Date(Date.now() + demoOffsetMs);
+  return new Date(Date.now() + (scopedOffset.getStore() ?? demoOffsetMs));
 }
 
 export function setDemoOffset(ms: number): void {
@@ -17,7 +22,23 @@ export function setDemoOffset(ms: number): void {
 }
 
 export function getDemoOffset(): number {
-  return demoOffsetMs;
+  return scopedOffset.getStore() ?? demoOffsetMs;
+}
+
+/** Run fn (and everything it awaits) with the clock reading `time` ("17:40") today. */
+export function withDemoTime<T>(time: string | undefined, fn: () => T): T {
+  return time ? scopedOffset.run(offsetForTime(time), fn) : fn();
+}
+
+/** Offset (ms) that makes now() read `time` ("17:40") today in the household time zone. */
+export function offsetForTime(time: string): number {
+  if (!isDemoTime(time)) throw new RangeError(`time "${time}" should look like 18:30`);
+  const target = localToDate(localParts(new Date()).date, time.padStart(5, "0"));
+  return target.getTime() - Date.now();
+}
+
+export function isDemoTime(time: unknown): time is string {
+  return typeof time === "string" && /^([01]?\d|2[0-3]):[0-5]\d$/.test(time);
 }
 
 /** Local calendar date (YYYY-MM-DD) and minutes-since-midnight in the household TZ. */

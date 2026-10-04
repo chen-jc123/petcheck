@@ -228,6 +228,8 @@
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { return null; } }
   if (new URLSearchParams(location.search).get("compact")) document.body.classList.add("compact");
+  // Demo clock (?time=17:40): Alexa answers as if it's that time today (for recording the demo video).
+  var DEMO_TIME = (function () { var t = new URLSearchParams(location.search).get("time"); return t && /^([01]?\d|2[0-3]):[0-5]\d$/.test(t) ? t : null; })();
 
   // --- Speaker picker & suggestions ---------------------------------------
   state.speaker = store(SPEAKER_STORE) || "Dad";
@@ -337,7 +339,7 @@
     fetch("/api/assistant", {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": state.key },
-      body: JSON.stringify({ text: text, speaker: state.speaker, history: state.history.slice(-10) }),
+      body: JSON.stringify(Object.assign({ text: text, speaker: state.speaker, history: state.history.slice(-10) }, DEMO_TIME ? { time: DEMO_TIME } : {})),
     }).then(function (res) {
       if (res.status === 401) { var e = new Error("unauthorized"); e.unauthorized = true; throw e; }
       return res.json().then(function (j) { if (!res.ok) throw new Error(j.error || res.statusText); return j; });

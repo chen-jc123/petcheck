@@ -3,6 +3,7 @@
 //   npm run db:reset    delete this household's data and load fresh demo data
 //   npm run db:status   show table status and how many records the household has
 //   npm run db:demo     like db:reset, plus today's tasks so far marked done (dinners left open)
+//   npm run db:demo -- 17:35   same, as if it were 5:35 PM (for recording with /demo?time=17:40)
 //                       so the household page starts tidy for recording the demo video
 
 import {
@@ -14,6 +15,7 @@ import {
 } from "@aws-sdk/client-dynamodb";
 import { HOUSEHOLD_ID, REGION, TABLE_NAME, batchWrite, queryHousehold } from "../src/dynamo.js";
 import { seedDemoData, seedTodaySoFar, takeChanges } from "../src/store.js";
+import { isDemoTime, offsetForTime, setDemoOffset, spokenTime, now } from "../src/clock.js";
 import { dynamoBackend } from "../src/dynamo.js";
 
 const client = new DynamoDBClient({ region: REGION });
@@ -50,8 +52,13 @@ async function reset(withToday = false) {
   const existing = await queryHousehold();
   await batchWrite(existing.map((it) => ({ DeleteRequest: { Key: { pk: it.pk, sk: it.sk } } })));
   console.log(`Deleted ${existing.length} records for household "${HOUSEHOLD_ID}".`);
+  const time = process.argv[3];
+  if (time && !isDemoTime(time)) throw new Error(`time "${time}" should look like 17:35`);
+  if (time) setDemoOffset(offsetForTime(time));
   seedDemoData();
   const today = withToday ? seedTodaySoFar() : 0;
+  if (time) console.log(`(demo clock: seeded as if it were ${spokenTime(now())})`);
+  setDemoOffset(0);
   const changes = takeChanges();
   await dynamoBackend().saveChanges(changes);
   console.log(`✔ Loaded ${changes.length} demo records (Mochi, Biscuit and last week's history).`);

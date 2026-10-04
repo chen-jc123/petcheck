@@ -12,6 +12,7 @@ import { METHOD_NOT_ALLOWED, apiKeyOk, buildServer, healthInfo } from "./mcp.js"
 import { authenticate, handleOAuth, mcpAccessError } from "./oauth.js";
 import { CORS_HEADERS, handleApi, runMissedCheck } from "./api.js";
 import { page } from "./page.js";
+import { isDemoTime, withDemoTime } from "./clock.js";
 
 interface FunctionUrlEvent {
   rawPath: string;
@@ -115,7 +116,9 @@ async function handleHttp(event: FunctionUrlEvent): Promise<LambdaResult> {
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   try {
     await server.connect(transport);
-    const response = await transport.handleRequest(request, { parsedBody });
+    // Demo clock from the simulated Alexa+ (only for authenticated callers; ignored if malformed).
+    const demo = headers["x-petcheck-demo-time"];
+    const response = await withDemoTime(isDemoTime(demo) ? demo : undefined, () => transport.handleRequest(request, { parsedBody }));
     return {
       statusCode: response.status,
       headers: Object.fromEntries(response.headers.entries()),

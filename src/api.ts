@@ -2,7 +2,7 @@
 //
 //   GET  /api/today[?time=HH:MM]          everything the household page shows for today
 //   POST /api/check-missed {time?: HH:MM} run the missed-task check now (demo / manual)
-//   POST /api/assistant {text, speaker, history}  simulated Alexa+ turn (Bedrock + MCP client)
+//   POST /api/assistant {text, speaker, history, time?}  simulated Alexa+ turn (Bedrock + MCP client)
 //   POST /api/log {pet, activity, by, confirm?, time?}  quick-log from the household page (same
 //                                         logic as the log_care tool, including the duplicate check)
 //
@@ -11,7 +11,7 @@
 //
 // Also exported: runMissedCheck(), which EventBridge Scheduler triggers every 5 minutes.
 
-import { localParts, localToDate, now, setDemoOffset } from "./clock.js";
+import { isDemoTime, now, offsetForTime, setDemoOffset, withDemoTime } from "./clock.js";
 import { storage } from "./mcp.js";
 import { notifyOwner } from "./notify.js";
 import { ACTIVITIES, PetCheckError, checkMissedTasks, logCare, todayView, type Activity, type Alert } from "./store.js";
@@ -25,9 +25,8 @@ export interface ApiResult {
 /** Offset (ms) that makes now() read `time` today in the household time zone. */
 function offsetFor(time?: string): number {
   if (!time) return 0;
-  if (!/^\d{1,2}:\d{2}$/.test(time)) throw new PetCheckError(`time "${time}" should look like 18:30`);
-  const target = localToDate(localParts(new Date()).date, time.padStart(5, "0"));
-  return target.getTime() - Date.now();
+  if (!isDemoTime(time)) throw new PetCheckError(`time "${time}" should look like 18:30`);
+  return offsetForTime(time);
 }
 
 /** Run fn with the clock shifted to `time` (if given), then restore it. */
@@ -88,9 +87,15 @@ export async function handleApi(
     if (method === "POST" && p === "/assistant") {
       if (!ctx.mcpUrl) return { status: 500, body: { error: "MCP URL unknown" } };
       try {
-        const r = await runAssistant(body as AssistantRequest, { mcpUrl: ctx.mcpUrl, apiKey: process.env.API_KEY });
+        // Optional demo clock: the turn (and its MCP tool calls) run as if it's `time` today.
+        const time = (body as { time?: string } | undefined)?.time;
+        if (time !== undefined && !isDemoTime(time)) throw new PetCheckError(`time "${time}" should look like 17:40`);
+        const r = await withDemoTime(time, () =>
+          runAssistant(body as AssistantRequest, { mcpUrl: ctx.mcpUrl!, apiKey: process.env.API_KEY, demoTime: time }),
+        );
         return { status: 200, body: r };
       } catch (err) {
+        if (err instanceof PetCheckError) throw err;
         const e = err as { name?: string; message?: string };
         console.error("assistant error:", err);
         // Surface Bedrock setup problems clearly (model access, region, permissions).

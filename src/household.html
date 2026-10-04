@@ -690,7 +690,7 @@
   var m = location.hash.match(/key=([^&]+)/);
   if (m) { store(false, decodeURIComponent(m[1])); history.replaceState(null, "", location.pathname + location.search); }
   var t = location.search.match(/[?&]time=(\d{1,2}:\d{2})/);
-  if (t) { $("demo-time").value = t[1].length === 4 ? "0" + t[1] : t[1]; state.demoTime = $("demo-time").value; $("demo-pill").hidden = false; $("demo-pill").textContent = "Demo clock: " + hhmmSpoken(state.demoTime); $("demo").open = true; }
+  if (t) { $("demo-time").value = t[1].length === 4 ? "0" + t[1] : t[1]; state.demoTime = $("demo-time").value; $("demo-pill").hidden = false; $("demo-pill").textContent = "Demo clock: " + hhmmSpoken(state.demoTime); if (window.top === window) $("demo").open = true; }
 
   state.key = store(true);
   if (state.key) start(); else { $("login").hidden = false; }
