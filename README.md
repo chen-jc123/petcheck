@@ -25,7 +25,7 @@ pocket), so opening an app is the last thing anyone does. Voice is the natural p
 | "I fed Mochi" (Emma, 10 minutes after Dad) | "Dad already fed Mochi at 7:52 AM. Do you want me to log it again?" |
 | "Has anyone walked Biscuit?" | What's done today and what's still due or overdue |
 | "Mochi threw up this morning" | Records the observation; counts repeats, never interprets them |
-| "Book Mochi's checkup next Tuesday at 10" | Schedules the vet visit |
+| "Book Mochi's checkup next Tuesday at 10" | Schedules the vet visit and reminds the household the day before |
 | "How's Mochi doing this week?" | Meals, walks, meds, missed tasks, notes and the next vet visit |
 | *(nobody logs dinner)* | 30 min late: household reminder · 60 min late: owner gets an email |
 
@@ -53,8 +53,18 @@ or type, and try:
 The **MCP traffic** panel shows every HTTP request the assistant makes to `/mcp`
 (`initialize` → `tools/list` → `tools/call log_care`), with full JSON-RPC bodies.
 
-`npm run demo` uses in-memory data and PetCheck's built-in rules engine, so it runs anywhere.
-The deployed version uses DynamoDB, and Amazon Bedrock once the account is approved (until then the built-in rules engine answers; see below).
+`npm run demo` uses in-memory data and PetCheck's built-in rules engine, so it runs anywhere with no keys.
+The household's pets and last week's history are sample data, seeded at startup; restarting resets them.
+
+**Browsers:** typing works everywhere. The mic needs the Web Speech API: Chrome (which sends audio to
+Google's speech service, so it needs a connection to it) or Safari. Firefox has no speech recognition, so
+type there. All times are shown in the household's time zone (`HOUSEHOLD_TZ`, default America/Detroit).
+
+**With a real language model:** copy [`.env.example`](.env.example) to `.env`, fill in an API key for any
+OpenAI-compatible or Anthropic-compatible endpoint, then `npm run demo:ai`. The startup line and the
+engine badge on the page show which model is answering. We test with Qwen (`qwen3.8-max`) through
+Alibaba Cloud Model Studio's OpenAI- and Anthropic-compatible endpoints; Amazon Bedrock works the same way
+once an account has model access.
 
 ## How it works
 
@@ -64,7 +74,8 @@ The deployed version uses DynamoDB, and Amazon Bedrock once the account is appro
         │ text                               │
         ▼                                    │
  /api/assistant                              │
- Amazon Bedrock (Nova) picks tools           │
+ language model picks tools                  │
+ (OpenAI / Anthropic API or Bedrock)         │
  → MCP client ──── Streamable HTTP ──────────┤
                                              ▼
                         PetCheck MCP server  /mcp   (AWS Lambda, stateless)
@@ -83,9 +94,16 @@ The deployed version uses DynamoDB, and Amazon Bedrock once the account is appro
 - **Stateless Streamable HTTP.** A fresh `McpServer` and transport per request, no session IDs, JSON
   responses. Each request loads the household from DynamoDB with one Query, runs the tool, and
   batch-writes only new records, so it runs unchanged on Lambda.
-- **Bedrock with a fallback.** The assistant uses Amazon Bedrock (Converse API with tool use, Amazon Nova
-  Lite). If the AWS account can't use Bedrock yet, it switches to a rules engine that understands
-  PetCheck's phrases and still calls the same MCP tools. The UI labels which engine answered.
+- **Any tool-calling model, with a fallback.** [`src/models.ts`](src/models.ts) speaks three protocols:
+  OpenAI Chat Completions, Anthropic Messages (each against any compatible endpoint) and the Amazon
+  Bedrock Converse API. `ASSISTANT_ENGINE` picks one; the tool loop and the MCP calls are identical for all
+  of them. In `auto` mode, if the model can't be reached (bad key, quota, outage) the assistant switches to
+  a rules engine that understands PetCheck's phrases and still calls the same MCP tools, and retries the
+  model after 10 minutes. The UI labels which engine and model answered every turn.
+- **Checked against the real model.** `npm run test:live` replays our acceptance scenarios (natural
+  phrasing, log-and-ask in one sentence, follow-up questions, "I fed him" with no pet named, duplicate
+  confirm and cancel, an unknown pet, a dose question, booking a vet visit) on fresh data and checks the
+  tool calls and the stored records, not just the wording.
 
 ### Where the track technology runs (for reviewers)
 
@@ -94,7 +112,8 @@ The deployed version uses DynamoDB, and Amazon Bedrock once the account is appro
 | [`src/mcp.ts`](src/mcp.ts) | `McpServer` with the 6 tools (`registerTool`, zod schemas, tool annotations) |
 | [`src/lambda.ts`](src/lambda.ts) | Lambda entry point: `WebStandardStreamableHTTPServerTransport` on `/mcp` |
 | [`src/app.ts`](src/app.ts) / [`src/server.ts`](src/server.ts) | Local server: `StreamableHTTPServerTransport` on `/mcp` |
-| [`src/assistant.ts`](src/assistant.ts) | Simulated Alexa+: MCP `Client` + `StreamableHTTPClientTransport` → `/mcp`, Bedrock Converse |
+| [`src/assistant.ts`](src/assistant.ts) | Simulated Alexa+: MCP `Client` + `StreamableHTTPClientTransport` → `/mcp`, the tool loop |
+| [`src/models.ts`](src/models.ts) | The model behind it: OpenAI- / Anthropic-compatible APIs or Bedrock Converse |
 | [`src/oauth.ts`](src/oauth.ts) | OAuth 2.1 for Alexa+: client credentials (`mcp:service`) and authorization code + PKCE (`mcp:tools`) |
 
 ## MCP tools
@@ -126,9 +145,14 @@ EventBridge Scheduler invokes the Lambda every 5 minutes. For each routine task 
 |---|---|---|
 | 30 min | household reminder | household page (and Alexa) |
 | 60 min | owner alert | emailed to the owner via Amazon SNS |
+| vet visit tomorrow (from 9 AM the day before) | vet reminder | household page, and emailed to the owner |
 
 Each alert is raised once and stored in DynamoDB; logging the task marks it resolved. Tasks more than
 3 hours late are skipped, which also prevents an alert flood after downtime.
+
+Locally, `npm start` / `npm run demo` run the same check on a 5-minute timer (`CHECK_EVERY_MIN`, 0 turns it
+off), so reminders appear without pressing anything; without SNS configured, the owner emails are written to
+the server log instead of being sent.
 
 ![Owner alert email](docs/screenshots/alert-email-mochi.png)
 
@@ -161,7 +185,7 @@ a real MCP client. Everything we could build ahead of access is done: once the t
 | **Amazon DynamoDB** | Single-table storage for pets, care logs, notes, vet visits and alerts (free-tier capacity) |
 | **Amazon EventBridge Scheduler** | Invokes the Lambda every 5 minutes for the missed-task check |
 | **Amazon SNS** | Emails the owner when a task is an hour overdue |
-| **Amazon Bedrock** | Converse API with tool use (Amazon Nova Lite) for the simulated Alexa+; automatic fallback while account access is pending (FL-006) |
+| **Amazon Bedrock** | Optional engine for the simulated Alexa+: Converse API with tool use (Amazon Nova Lite). Our account is still waiting for access (FL-006), so the demo uses an OpenAI-compatible endpoint instead |
 | **AWS IAM** | Least privilege: Lambda may only touch the `petcheck` table, the alert topic and Bedrock invoke; the scheduler may only invoke the function |
 
 ## Deploy to AWS
@@ -177,7 +201,8 @@ npm run deploy      # Lambda + Function URL + 5-min schedule + OAuth secrets (+ 
 `npm run deploy` is idempotent: the first run creates everything, later runs update the code. It prints
 the URLs and runs a smoke test (health, `tools/list`, an OAuth client-credentials token, a missed-task
 check). Secrets (API key, OAuth client secret and signing key) are generated once into `.env.deploy`,
-which is git-ignored. Add `ALERT_EMAIL=you@example.com` there for owner emails.
+which is git-ignored. Add `ALERT_EMAIL=you@example.com` there for owner emails, and the model settings
+from `.env.example` (`ASSISTANT_ENGINE`, `OPENAI_*` or `ANTHROPIC_*`) to choose the simulated Alexa+'s model.
 
 | Path | What |
 |---|---|
@@ -190,7 +215,8 @@ which is git-ignored. Add `ALERT_EMAIL=you@example.com` there for owner emails.
 | `/privacy`, `/terms`, `/health` | Listing pages and a health check |
 
 To record the demo video at any time of day: `npm run db:demo -- 17:35` resets the household as if it
-were 5:35 PM, then open `/demo?time=17:40`.
+were 5:35 PM, then open `/demo?time=17:40`. Locally, `npm run demo:video` does the same in memory (with the
+model from `.env`). The shot list is in [docs/submission/video-script.md](docs/submission/video-script.md).
 
 Other commands: `npm run logs` (follow the Lambda logs), `npm run db:status`, `npm run dev:dynamo`
 (local server against DynamoDB), `npm run inspector` (MCP Inspector; connect with Streamable HTTP to
@@ -199,14 +225,22 @@ Other commands: `npm run logs` (follow the Lambda logs), `npm run db:status`, `n
 ## Tests
 
 ```bash
-npm run smoke           # tool logic: duplicate check, status, notes, summary
-npm run test:alerts     # missed-task alerts and task matching with a simulated clock
+npm test                # all of the offline checks below (no network, no keys)
+npm run smoke           # tool logic: duplicate check, status, notes, summary, vet visits
+npm run test:alerts     # missed-task alerts, vet reminders and task matching with a simulated clock
 npm run test:storage    # persistence with a fake database, incl. Lambda cold starts between requests
 npm run test:lambda     # the Lambda handler with Function URL events, incl. OAuth flows
 npm run test:oauth      # OAuth 2.1 as Alexa+ runs it, plus negative cases
-npm run test:assistant  # assistant → real MCP client → HTTP → real server; Bedrock-blocked fallback
+npm run test:assistant  # assistant → real MCP client → HTTP → real server; model-blocked fallback
+npm run test:models     # OpenAI / Anthropic wire formats against fake model servers; when auto falls back
 npm run test:rules      # the rules engine's phrase understanding
 npm run check:listing   # Alexa+ listing limits and image sizes
+npm run build           # TypeScript type check of src, test and scripts
+
+npm run check:mcp       # official MCP Inspector CLI against a local server: tools/list, a read, a write,
+                        # an invalid call (add a URL to check a deployed server; set API_KEY for its key)
+
+npm run test:live       # acceptance scenarios against the real model in .env (needs a key)
 ```
 
 ## Friction log

@@ -18,7 +18,8 @@ TABLE="${TABLE_NAME:-petcheck}"
 REGION="${AWS_REGION:-$(aws configure get region 2>/dev/null || true)}"
 REGION="${REGION:-us-east-1}"
 HOUSEHOLD_TZ="${HOUSEHOLD_TZ:-America/Detroit}"
-# Simulated Alexa+ model (Amazon Bedrock). Override in .env.deploy, e.g.
+# Simulated Alexa+ model: set ASSISTANT_ENGINE and the OPENAI_* / ANTHROPIC_* settings in
+# .env.deploy (same names as .env.example), or override the Bedrock model, e.g.
 #   BEDROCK_MODEL_ID=us.amazon.nova-pro-v1:0
 export AWS_REGION="$REGION" AWS_PAGER=""
 
@@ -91,7 +92,26 @@ aws iam put-role-policy --role-name "$ROLE" --policy-name petcheck-dynamodb --po
 ROLE_ARN="arn:aws:iam::$ACCOUNT:role/$ROLE"
 
 echo "4/7 Lambda function..."
-ENV_JSON="{\"Variables\":{\"STORAGE\":\"dynamodb\",\"TABLE_NAME\":\"$TABLE\",\"HOUSEHOLD_TZ\":\"$HOUSEHOLD_TZ\",\"API_KEY\":\"$API_KEY\",\"ALERT_TOPIC_ARN\":\"$TOPIC_ARN\",\"BEDROCK_MODEL_ID\":\"$BEDROCK_MODEL_ID\",\"OAUTH_CLIENT_ID\":\"$OAUTH_CLIENT_ID\",\"OAUTH_CLIENT_SECRET\":\"$OAUTH_CLIENT_SECRET\",\"OAUTH_SIGNING_KEY\":\"$OAUTH_SIGNING_KEY\",\"OAUTH_REDIRECT_URIS\":\"${OAUTH_REDIRECT_URIS:-}\",\"NODE_OPTIONS\":\"--enable-source-maps\"}}"
+# Built with node so values containing quotes (OPENAI_EXTRA_BODY is JSON) stay valid JSON.
+# Optional model settings are only passed when set.
+ENV_JSON=$(STORAGE=dynamodb TABLE_NAME="$TABLE" HOUSEHOLD_TZ="$HOUSEHOLD_TZ" API_KEY="$API_KEY" \
+  ALERT_TOPIC_ARN="$TOPIC_ARN" BEDROCK_MODEL_ID="$BEDROCK_MODEL_ID" OAUTH_CLIENT_ID="$OAUTH_CLIENT_ID" \
+  OAUTH_CLIENT_SECRET="$OAUTH_CLIENT_SECRET" OAUTH_SIGNING_KEY="$OAUTH_SIGNING_KEY" \
+  OAUTH_REDIRECT_URIS="${OAUTH_REDIRECT_URIS:-}" NODE_OPTIONS="--enable-source-maps" \
+  ASSISTANT_ENGINE="${ASSISTANT_ENGINE:-}" MODEL_TIMEOUT_MS="${MODEL_TIMEOUT_MS:-}" \
+  OPENAI_BASE_URL="${OPENAI_BASE_URL:-}" OPENAI_API_KEY="${OPENAI_API_KEY:-}" OPENAI_MODEL="${OPENAI_MODEL:-}" \
+  OPENAI_EXTRA_BODY="${OPENAI_EXTRA_BODY:-}" ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL:-}" \
+  ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" ANTHROPIC_MODEL="${ANTHROPIC_MODEL:-}" \
+  node -e '
+    const always = ["STORAGE", "TABLE_NAME", "HOUSEHOLD_TZ", "API_KEY", "ALERT_TOPIC_ARN", "BEDROCK_MODEL_ID", "OAUTH_CLIENT_ID",
+      "OAUTH_CLIENT_SECRET", "OAUTH_SIGNING_KEY", "OAUTH_REDIRECT_URIS", "NODE_OPTIONS"];
+    const optional = ["ASSISTANT_ENGINE", "MODEL_TIMEOUT_MS", "OPENAI_BASE_URL", "OPENAI_API_KEY", "OPENAI_MODEL", "OPENAI_EXTRA_BODY",
+      "ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL"];
+    const v = {};
+    for (const k of always) v[k] = process.env[k] ?? "";
+    for (const k of optional) if (process.env[k]) v[k] = process.env[k];
+    console.log(JSON.stringify({ Variables: v }));
+  ')
 if aws lambda get-function --function-name "$FN" >/dev/null 2>&1; then
   aws lambda update-function-code --function-name "$FN" --zip-file fileb://dist/petcheck-lambda.zip >/dev/null
   aws lambda wait function-updated-v2 --function-name "$FN"
@@ -187,7 +207,7 @@ cat <<EOF
 
 ✔ PetCheck is live
   Household page: $URL/   (enter the key from .env.deploy once)
-  Alexa sim:      $URL/alexa   ·   Split-screen demo: $URL/demo   (Bedrock model: $BEDROCK_MODEL_ID)
+  Alexa sim:      $URL/alexa   ·   Split-screen demo: $URL/demo   (assistant engine: ${ASSISTANT_ENGINE:-auto})
   MCP URL:  $URL/mcp
   API:      $URL/api/today   ·   POST $URL/api/check-missed {"time":"18:30"}
   Auth:     x-api-key: <API_KEY from .env.deploy>   (or Authorization: Bearer <key>)

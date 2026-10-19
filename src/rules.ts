@@ -1,24 +1,25 @@
 // Backup "rules" engine for the simulated Alexa+.
 //
-// It implements the same ConverseFn interface as Amazon Bedrock, so it plugs into
-// exactly the same loop: it picks a PetCheck tool, the MCP client calls the MCP
-// server over HTTP, and the tool's (already spoken-friendly) result becomes the reply.
-// Used when Bedrock isn't available (e.g. account not yet allowlisted) or when
-// ASSISTANT_ENGINE=rules. Understands the everyday phrases PetCheck is built for.
+// It implements the same ConverseFn interface as the language models (models.ts), so
+// it plugs into exactly the same loop: it picks a PetCheck tool, the MCP client calls
+// the MCP server over HTTP, and the tool's (already spoken-friendly) result becomes the
+// reply. Used when the model can't be reached (no key, account not yet allowlisted,
+// outage) or when ASSISTANT_ENGINE=rules. Understands the everyday phrases PetCheck is built for.
 
 import type { ConverseFn, ConverseInput, Message } from "./assistant.js";
 import type { Activity } from "./store.js";
 
-export type Intent =
-  | { kind: "tool"; name: string; input: Record<string, unknown> }
-  | { kind: "say"; text: string };
+type ToolCall = { name: string; input: Record<string, unknown> };
+
+/** A tool to call (and optionally a second one once it succeeds), or something to say directly. */
+export type Intent = ({ kind: "tool" } & ToolCall & { then?: ToolCall }) | { kind: "say"; text: string };
 
 const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
 
 /** Words that are never pet names. */
 const STOP = new Set(
-  ("i me my we our you he she it they the a an and or to for of on in at with just already has have had did does do is are was " +
+  ("i me my we our you he she it they him them the a an and or to for of on in at with just already has have had did does do is are was else " +
     "were anyone someone somebody everyone today tonight this morning evening week what what's whats who how how's hows when where " +
     "alexa please yes no yeah nope ok okay mom dad emma cat dog kitty puppy pet pets fed feed walked walk gave give took take " +
     "breakfast dinner lunch food meal medicine meds pill litter water brushed groomed bath left still need needs be been his her " +
@@ -102,11 +103,20 @@ export function dateTimeOf(text: string, today: string): { date?: string; time?:
 }
 
 /** Decide what to do with one utterance. */
-export function parseIntent(text: string, ctx: { speaker: string; today: string; previousReply?: string }): Intent {
+export function parseIntent(
+  text: string,
+  ctx: { speaker: string; today: string; previousReply?: string; previousUser?: string },
+): Intent {
   const raw = text.trim();
   const t = raw.toLowerCase();
   const pet = petOf(raw);
   const by = ctx.speaker;
+
+  // Answer to "Which pet? You have Mochi and Biscuit.": redo the previous request for that pet.
+  if (ctx.previousReply && /^Which pet\?/.test(ctx.previousReply) && ctx.previousUser && pet && !activityOf(t)) {
+    const prev = parseIntent(ctx.previousUser, { speaker: ctx.speaker, today: ctx.today });
+    if (prev.kind === "tool") return { ...prev, input: { ...prev.input, pet } };
+  }
 
   // Follow-up to a duplicate check: "Dad already fed Mochi at 7:52 AM … log it again?"
   if (ctx.previousReply && /log it again\?/i.test(ctx.previousReply)) {
@@ -137,11 +147,23 @@ export function parseIntent(text: string, ctx: { speaker: string; today: string;
     return { kind: "tool", name: "add_vet_visit", input: { pet, date, time, reason } };
   }
 
+  // A report and a question at once: "I just walked Biscuit. What else does he need today?"
+  // Log it first, then answer the question about the same pet.
+  const [statement, ...rest] = raw.split(/(?<=[.!])\s+/);
+  if (rest.length && /\?$/.test(raw) && activityOf(statement.toLowerCase())) {
+    const first = parseIntent(statement, ctx);
+    const second = parseIntent(rest.join(" "), { speaker: ctx.speaker, today: ctx.today });
+    if (first.kind === "tool" && first.name === "log_care" && second.kind === "tool" && /^(get_status|weekly_summary)$/.test(second.name)) {
+      return { ...first, then: { name: second.name, input: { pet: second.input.pet ?? first.input.pet } } };
+    }
+  }
+
   const isQuestion = /\?$/.test(raw) || /^(has|have|did|does|is|are|was|what|what's|whats|how|how's|hows|who|when|anything|any)\b/.test(t);
   if (isQuestion) {
-    if (/\b(week|weekly|summary|been doing|how('s| is| has)\s+\w+\s+(doing|been))\b/.test(t) || /^how('s| is)\b/.test(t)) {
-      return { kind: "tool", name: "weekly_summary", input: { pet } };
-    }
+    const weekly =
+      /\b(week|weekly|summary)\b/.test(t) ||
+      (!/\b(today|tonight)\b/.test(t) && (/\b(been doing|how('s| is| has)\s+\w+\s+(doing|been))\b/.test(t) || /^how('s| is)\b/.test(t)));
+    if (weekly) return { kind: "tool", name: "weekly_summary", input: { pet } };
     return { kind: "tool", name: "get_status", input: { pet } };
   }
 
@@ -165,29 +187,47 @@ export function parseIntent(text: string, ctx: { speaker: string; today: string;
 const lastText = (m: Message | undefined) =>
   m?.content.map((c) => ("text" in c ? c.text : "")).join(" ").trim() ?? "";
 
-/** The ConverseFn: round 1 picks a tool (or answers directly); round 2 speaks the tool result. */
+type ToolResult = Extract<Message["content"][number], { toolResult: unknown }>;
+
+const say = (text: string) => ({ stopReason: "end_turn", output: { message: { role: "assistant" as const, content: [{ text }] } } });
+const useTool = ({ name, input }: ToolCall) => ({
+  stopReason: "tool_use",
+  output: {
+    message: {
+      role: "assistant" as const,
+      content: [{ toolUse: { toolUseId: `rules-${Date.now()}`, name, input: Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)) } }],
+    },
+  },
+});
+
+/**
+ * The ConverseFn: round 1 picks a tool (or answers directly); once the tool results are
+ * back it calls the follow-up tool, if any, then speaks the results.
+ */
 export const rulesConverse: ConverseFn = async (input: ConverseInput) => {
   const msgs = input.messages;
-  const last = msgs[msgs.length - 1];
-  const toolResult = last?.content.find((c) => "toolResult" in c) as
-    | { toolResult: { content: { text: string }[] } }
-    | undefined;
-  if (toolResult) {
-    return { stopReason: "end_turn", output: { message: { role: "assistant", content: [{ text: toolResult.toolResult.content[0]?.text ?? "" }] } } };
-  }
+  // This turn's utterance is the last user message with text; tool results come after it.
+  const lastOf = (list: Message[], role: Message["role"]) => [...list].reverse().find((m) => m.role === role);
+  const utterance = [...msgs].reverse().find((m) => m.role === "user" && m.content.some((c) => "text" in c));
+  const at = utterance ? msgs.lastIndexOf(utterance) : msgs.length;
+  const previousReply = lastText(lastOf(msgs.slice(0, at), "assistant"));
+  const previousUser = lastText(lastOf(msgs.slice(0, Math.max(at - 1, 0)), "user"));
 
   const sys = input.system[0]?.text ?? "";
   const speaker = sys.match(/The person speaking right now is ([^.\n]+)\./)?.[1] ?? "Someone";
   const today = sys.match(/Today's date is (\d{4}-\d{2}-\d{2})/)?.[1] ?? new Date().toISOString().slice(0, 10);
-  const previousReply = lastText([...msgs].reverse().find((m) => m.role === "assistant"));
-  const intent = parseIntent(lastText(last), { speaker, today, previousReply });
+  const intent = parseIntent(lastText(utterance), { speaker, today, previousReply, previousUser });
 
-  if (intent.kind === "say") {
-    return { stopReason: "end_turn", output: { message: { role: "assistant", content: [{ text: intent.text }] } } };
+  const results = msgs
+    .slice(at + 1)
+    .flatMap((m) => m.content.filter((c): c is ToolResult => "toolResult" in c))
+    .map((c) => ({ text: c.toolResult.content[0]?.text ?? "", failed: c.toolResult.status === "error" }));
+  if (results.length) {
+    // Stop at an error or a duplicate question; otherwise run the follow-up tool once.
+    const done = results.some((r) => r.failed || /log it again\?/i.test(r.text));
+    if (intent.kind === "tool" && intent.then && results.length === 1 && !done) return useTool(intent.then);
+    return say(results.map((r) => r.text).join(" "));
   }
-  const cleanInput = Object.fromEntries(Object.entries(intent.input).filter(([, v]) => v !== undefined));
-  return {
-    stopReason: "tool_use",
-    output: { message: { role: "assistant", content: [{ toolUse: { toolUseId: `rules-${Date.now()}`, name: intent.name, input: cleanInput } }] } },
-  };
+
+  return intent.kind === "say" ? say(intent.text) : useTool(intent);
 };

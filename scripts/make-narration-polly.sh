@@ -3,7 +3,8 @@
 #   npm run narration:polly                      # Stephen, generative engine
 #   VOICE=Ruth npm run narration:polly           # other voices: Matthew, Ruth, Danielle, Gregory…
 #   ENGINE=neural npm run narration:polly        # if generative isn't available for the voice/region
-# Output: docs/video/polly-scene-1.mp3 … polly-scene-9.mp3 (+ polly-all-scenes.mp3).
+# Output: docs/video/polly-scene-1.mp3 … polly-scene-10.mp3 (+ polly-all-scenes.mp3).
+# Shot list for each scene: docs/submission/video-script.md
 # Uses your default AWS CLI profile; needs polly:SynthesizeSpeech (AdministratorAccess covers it).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -18,11 +19,12 @@ SCENES=(
   "Has anyone fed the cat? In every home with pets, that question gets asked every day, and the answer is usually a guess. So pets get fed twice, or they miss dinner, or their medication."
   "PetCheck fixes that with Alexa Plus. Anyone at home just says what they did. On the left is Alexa. On the right is the household's live view, the owner's phone."
   "Dad feeds Mochi and tells Alexa. It's logged for the whole house instantly. And you can see the real MCP calls PetCheck makes: initialize, list tools, then log care."
-  "Ten minutes later, Emma doesn't know Dad already did it. PetCheck catches it. Dad already fed Mochi. No double dinner."
+  "Moments later, Emma doesn't know Dad already did it. PetCheck catches it. Dad already fed Mochi. No double dinner."
+  "A real language model is listening, so people can just talk. Emma walked Biscuit and asks what else he needs. PetCheck logs the walk first, then answers from the updated log. And if nobody says which pet, it asks."
   "Now it's 7 PM, and nobody fed Biscuit. Every five minutes, an EventBridge schedule checks the routine. After thirty minutes, the house gets a reminder. After an hour, the owner gets an email, wherever they are."
-  "Mom asks how Mochi's week went: meals, missed tasks, anything the family noted, and the next vet visit. Useful to bring to an appointment."
+  "Mom asks how Mochi's week went: meals, missed tasks, and anything the family noted. Book a checkup, and PetCheck reminds the house the day before."
   "And PetCheck never plays vet. It records and reminds, and anything medical goes to your veterinarian."
-  "Under the hood, PetCheck is an MCP server using streamable HTTP, running statelessly on AWS Lambda, with DynamoDB for storage, and EventBridge Scheduler and SNS for alerts. Amazon Bedrock is built in to understand speech, but our account is still waiting for Bedrock approval, so this demo runs on PetCheck's built-in rules fallback. Even this narration is Amazon Polly. PetCheck is ready for real Alexa Plus, with O-Auth account linking and the listing materials done. The Alexa Plus toolkit is still in private preview, so this demo uses a simulated Alexa Plus that calls the same live server."
+  "Under the hood, PetCheck is an MCP server using streamable HTTP, running statelessly on AWS Lambda, with DynamoDB for storage, and EventBridge Scheduler and SNS for alerts. A language model chooses PetCheck's tools for every request, and if it can't be reached, a built-in rules engine takes over. Even this narration is Amazon Polly. PetCheck is ready for real Alexa Plus, with O-Auth account linking and the listing materials done. The Alexa Plus toolkit is still in private preview, so this demo uses a simulated Alexa Plus that calls the same live server."
   "No app to install, and nothing to remember to open. You just say what you did. PetCheck."
 )
 

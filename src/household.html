@@ -271,7 +271,8 @@
       if (value) localStorage.setItem(KEY_STORE, value); else localStorage.removeItem(KEY_STORE);
     } catch (e) { return null; }
   }
-  function spokenTime(iso) { return new Date(iso).toLocaleTimeString(LOCALE, { hour: "numeric", minute: "2-digit" }); }
+  var TZ; // household time zone from /api/today; a viewer abroad still sees the household's clock
+  function spokenTime(iso) { return new Date(iso).toLocaleTimeString(LOCALE, { hour: "numeric", minute: "2-digit", timeZone: TZ }); }
   function hhmmSpoken(hhmm) {
     var p = hhmm.split(":"), h = +p[0], m = p[1];
     var ampm = h < 12 ? "AM" : "PM", h12 = h % 12 === 0 ? 12 : h % 12;
@@ -492,6 +493,7 @@
   }
 
   function render(v) {
+    TZ = v.tz;
     var d = new Date(v.date + "T12:00:00");
     $("date").textContent = d.toLocaleDateString(LOCALE, { weekday: "long", month: "long", day: "numeric" });
     v.pets.forEach(function (p) { speciesByPet[p.name] = p.species; });

@@ -74,7 +74,7 @@ try {
   );
   console.log("✔ wrong key → MCP server rejects the assistant");
 
-  // 5. Bedrock refuses this account → automatic switch to the rules engine, still via MCP.
+  // 5. The model service refuses this account (Bedrock's allowlisting error) → automatic switch to the rules engine, still via MCP.
   const blocked: ConverseFn = async () => {
     const e = new Error(
       "To access Amazon Bedrock, you must provide further information so we can verify you are a corporate customer",
@@ -82,31 +82,31 @@ try {
     e.name = "ValidationException";
     throw e;
   };
-  r = await runAssistant({ text: "Has anyone walked Biscuit?", speaker: "Mom" }, { mcpUrl, apiKey: "test", bedrock: blocked });
+  r = await runAssistant({ text: "Has anyone walked Biscuit?", speaker: "Mom" }, { mcpUrl, apiKey: "test", model: blocked });
   assert.equal(r.engine, "rules");
   assert.match(r.engineNote ?? "", /Bedrock unavailable: ValidationException/);
   assert.ok(r.trace.some((t) => t.method === "tools/call" && t.tool === "get_status"), "rules engine still calls the MCP server");
   console.log("✔ Bedrock blocked → rules engine:", r.reply);
 
   // 6. Rules engine handles the duplicate follow-up “yes”.
-  const dup = await runAssistant({ text: "I fed Mochi", speaker: "Emma" }, { mcpUrl, apiKey: "test", bedrock: blocked });
+  const dup = await runAssistant({ text: "I fed Mochi", speaker: "Emma" }, { mcpUrl, apiKey: "test", model: blocked });
   assert.match(dup.reply, /already fed Mochi/);
   r = await runAssistant(
     { text: "yes", speaker: "Emma", history: [{ role: "user", text: "I fed Mochi" }, { role: "assistant", text: dup.reply }] },
-    { mcpUrl, apiKey: "test", bedrock: blocked },
+    { mcpUrl, apiKey: "test", model: blocked },
   );
   assert.match(r.reply, /^Got it\. Emma fed Mochi/);
   console.log("✔ Emma: “I fed Mochi” →", dup.reply, "→ “yes” →", r.reply);
 
   // 7. Vet-advice question never reaches a tool.
-  r = await runAssistant({ text: "Can dogs eat grapes?", speaker: "Dad" }, { mcpUrl, apiKey: "test", bedrock: blocked });
+  r = await runAssistant({ text: "Can dogs eat grapes?", speaker: "Dad" }, { mcpUrl, apiKey: "test", model: blocked });
   assert.equal(r.toolCalls.length, 0);
   console.log("✔ “Can dogs eat grapes?” →", r.reply);
 
   // 8. Demo clock: the whole turn, including the MCP tool call on the server, runs at 5:40 PM.
   const { withDemoTime, localParts } = await import("../src/clock.js");
   r = await withDemoTime("17:40", () =>
-    runAssistant({ text: "I fed Biscuit", speaker: "Mom", time: "17:40" } as never, { mcpUrl, apiKey: "test", bedrock: blocked, demoTime: "17:40" }),
+    runAssistant({ text: "I fed Biscuit", speaker: "Mom", time: "17:40" } as never, { mcpUrl, apiKey: "test", model: blocked, demoTime: "17:40" }),
   );
   assert.match(r.reply, /Mom fed Biscuit/);
   const today = await (await fetch(mcpUrl.replace("/mcp", "/api/today?time=17:45"), { headers: { "x-api-key": "test" } })).json();

@@ -9,7 +9,7 @@ process.env.OAUTH_SIGNING_KEY = "signing-key";
 const KEY = process.env.API_KEY;
 const { handler } = await import("../src/lambda.js");
 type HttpResult = { statusCode: number; headers?: Record<string, string>; body?: string };
-const http = async (e: ReturnType<typeof event>) => (await handler(e)) as HttpResult;
+const http = async (e: Parameters<typeof handler>[0]) => (await handler(e)) as HttpResult;
 
 const event = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}) => ({
   rawPath: path,
@@ -33,7 +33,7 @@ r = await http(event("POST", "/mcp", rpc(1, "tools/list")));
 assert.equal(r.statusCode, 401);
 console.log("✔ no key → 401");
 
-r = await handler(
+r = await http(
   event("POST", "/mcp", rpc(1, "initialize", {
     protocolVersion: "2025-11-25",
     capabilities: {},

@@ -23,7 +23,7 @@
   .logo { width: 26px; height: 26px; border-radius: 7px; flex: none; }
   header h1 { font-size: 18px; margin: 0; }
   .tagpill { font-size: 12px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
-  .tagpill.engine.bedrock { color: var(--ok); border-color: rgba(60,207,142,.4); }
+  .tagpill.engine.llm { color: var(--ok); border-color: rgba(60,207,142,.4); }
   .tagpill.engine.rules { color: var(--warn); border-color: rgba(240,178,74,.4); }
   header a { margin-left: auto; color: var(--muted); font-size: 13px; }
 
@@ -211,7 +211,7 @@
         </div>
       </div>
     </div>
-    <footer>Voice in and out runs in your browser. The assistant uses Amazon Bedrock (with a rules fallback) and reaches PetCheck only through its MCP server.</footer>
+    <footer>Voice in and out runs in your browser. The assistant is a tool-calling language model (OpenAI- or Anthropic-compatible API, or Amazon Bedrock, with a rules fallback) and reaches PetCheck only through its MCP server.</footer>
   </section>
 </main>
 
@@ -273,8 +273,12 @@
     if (log.querySelector(".empty")) log.textContent = "";
     var pill = $("engine-pill");
     pill.hidden = false;
-    pill.className = "tagpill engine " + (r.engine === "rules" ? "rules" : "bedrock");
-    pill.textContent = r.engine === "rules" ? "Engine: rules (Bedrock pending)" : "Engine: Amazon Bedrock";
+    var unavailable = r.engineNote && / unavailable: /.test(r.engineNote) ? r.engineNote.split(" unavailable: ")[0] : "";
+    pill.className = "tagpill engine " + (r.engine === "rules" ? "rules" : "llm");
+    pill.textContent = r.engine === "rules"
+      ? "Engine: rules" + (unavailable ? " (model unavailable)" : "")
+      : "Engine: " + r.model;
+    pill.title = r.engine === "rules" ? (r.engineNote || "") : r.model + " via " + r.engineLabel;
     var head = el("div", "turn", state.speaker + ": “" + text + "”");
     var frag = document.createDocumentFragment();
     frag.appendChild(head);
@@ -295,8 +299,8 @@
       frag.appendChild(d);
     });
     var engineText = r.engine === "rules"
-      ? "Rules engine (backup)" + (r.engineNote && r.engineNote.indexOf("Bedrock unavailable") === 0 ? " · Bedrock unavailable on this account" : "")
-      : "Amazon Bedrock " + r.model;
+      ? "Rules engine (backup)" + (unavailable ? " · " + unavailable + " unavailable" : "")
+      : r.model + " via " + r.engineLabel;
     frag.appendChild(el("div", "model", engineText + " · " + (r.toolCalls || []).length + " tool call(s) · " + r.ms + " ms total"));
     log.insertBefore(frag, log.firstChild);
     // Collapse tool bodies from older turns to keep the panel readable.
@@ -382,7 +386,9 @@
     };
     rec.onerror = function (ev) {
       var msg = ev.error === "not-allowed" ? "Microphone blocked. Allow it in the browser, or type instead." :
-                ev.error === "no-speech" ? "Didn't hear anything. Try again." : "Voice input error: " + ev.error;
+                ev.error === "no-speech" ? "Didn't hear anything. Try again." :
+                ev.error === "network" ? "Speech service unreachable (Chrome sends audio to Google). Check the connection, try Safari, or type instead." :
+                "Voice input error: " + ev.error;
       mode("", msg);
     };
     rec.onend = function () {

@@ -23,10 +23,16 @@
     "test:assistant": "tsx test/assistant.ts",
     "test:rules": "tsx test/rules.ts",
     "test:oauth": "tsx test/oauth.ts",
+    "test:models": "tsx test/models.ts",
+    "test:live": "tsx test/agent-live.ts",
     "check:listing": "node scripts/check-listing.mjs",
+    "check:mcp": "bash scripts/check-mcp.sh",
     "demo": "ASSISTANT_ENGINE=rules DEMO_TODAY=1 tsx src/server.ts",
+    "demo:ai": "DEMO_TODAY=1 tsx src/server.ts",
+    "demo:video": "DEMO_TODAY=17:35 CHECK_EVERY_MIN=0 tsx src/server.ts",
     "db:demo": "tsx scripts/db.ts demo",
-    "narration:polly": "bash scripts/make-narration-polly.sh"
+    "narration:polly": "bash scripts/make-narration-polly.sh",
+    "test": "npm run -s smoke && npm run -s test:alerts && npm run -s test:storage && npm run -s test:lambda && npm run -s test:oauth && npm run -s test:assistant && npm run -s test:models && npm run -s test:rules && npm run -s check:listing"
   },
   "engines": {
     "node": ">=20"

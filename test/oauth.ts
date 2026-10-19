@@ -112,7 +112,10 @@ console.log("✔ refresh_token (client_secret_post) → new access token");
 
 // 5. Token hygiene
 assert.equal(authenticate(`Bearer ${user.access_token}`, undefined, "https://other.example/mcp"), null);
-const tampered = user.access_token.slice(0, -2) + (user.access_token.endsWith("A") ? "B" : "A") + user.access_token.slice(-1);
+// Change one signature character (the second-to-last; the last one may only carry padding bits).
+const at = user.access_token.length - 2;
+const tampered = user.access_token.slice(0, at) + (user.access_token[at] === "A" ? "B" : "A") + user.access_token.slice(at + 1);
+assert.notEqual(tampered, user.access_token);
 assert.equal(authenticate(`Bearer ${tampered}`, undefined, mcp), null);
 const expired = sign({ typ: "access", aud: mcp, sub: "demo", scope: "mcp:tools", exp: Math.floor(Date.now() / 1000) - 5 });
 assert.equal(authenticate(`Bearer ${expired}`, undefined, mcp), null);

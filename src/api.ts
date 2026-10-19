@@ -9,7 +9,8 @@
 // `time` pretends it's that time today, so the demo can jump to 6:30 PM and run
 // the *real* check logic. Both endpoints require the API key when one is set.
 //
-// Also exported: runMissedCheck(), which EventBridge Scheduler triggers every 5 minutes.
+// Also exported: runMissedCheck(), which EventBridge Scheduler triggers every 5 minutes, and
+// startMissedCheckSchedule(), the same schedule for the local server.
 
 import { isDemoTime, now, offsetForTime, setDemoOffset, withDemoTime } from "./clock.js";
 import { storage } from "./mcp.js";
@@ -53,6 +54,19 @@ export async function runMissedCheck(time?: string): Promise<{ checkedAt: string
   const notified = await notifyOwner(alerts);
   if (alerts.length) console.log(`missed-task check: ${alerts.length} new alert(s), ${notified} notified`);
   return { checkedAt, alerts, notified };
+}
+
+/**
+ * Local stand-in for EventBridge Scheduler (`npm start`, `npm run dev`): run the missed-task
+ * check every `everyMs`, so reminders appear without anyone pressing a button.
+ * Returns a function that stops the schedule.
+ */
+export function startMissedCheckSchedule(everyMs: number, check = () => runMissedCheck()): () => void {
+  const timer = setInterval(() => {
+    check().catch((err) => console.error("scheduled missed-task check failed:", err));
+  }, everyMs);
+  timer.unref();
+  return () => clearInterval(timer);
 }
 
 export async function handleApi(

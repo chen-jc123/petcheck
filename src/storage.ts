@@ -18,6 +18,7 @@ import {
   type Pet,
   type VetVisit,
 } from "./store.js";
+import { isDemoTime, offsetForTime, setDemoOffset } from "./clock.js";
 
 export interface HouseholdState {
   pets: Pet[];
@@ -42,7 +43,14 @@ export interface Storage {
 export function memoryStorage(seed = true): Storage {
   if (seed) seedDemoData();
   // `npm run demo`: start the day tidy (everything due so far done, both dinners open).
-  if (seed && process.env.DEMO_TODAY) seedTodaySoFar();
+  // DEMO_TODAY=17:35 does it as if it were 5:35 PM, for recording with /demo?time=17:40
+  // (the local twin of `npm run db:demo -- 17:35`).
+  const demoToday = process.env.DEMO_TODAY;
+  if (seed && demoToday) {
+    if (isDemoTime(demoToday)) setDemoOffset(offsetForTime(demoToday));
+    seedTodaySoFar();
+    setDemoOffset(0);
+  }
   takeChanges(); // nothing to persist in memory mode
   return {
     mode: "memory",
