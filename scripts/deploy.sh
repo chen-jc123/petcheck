@@ -81,7 +81,7 @@ aws iam put-role-policy --role-name "$ROLE" --policy-name petcheck-dynamodb --po
   \"Version\": \"2012-10-17\",
   \"Statement\": [{
     \"Effect\": \"Allow\",
-    \"Action\": [\"dynamodb:Query\", \"dynamodb:BatchWriteItem\", \"dynamodb:PutItem\"],
+    \"Action\": [\"dynamodb:Query\", \"dynamodb:BatchWriteItem\", \"dynamodb:PutItem\", \"dynamodb:GetItem\"],
     \"Resource\": \"arn:aws:dynamodb:$REGION:$ACCOUNT:table/$TABLE\"
   },{
     \"Effect\": \"Allow\",

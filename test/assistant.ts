@@ -1,6 +1,7 @@
-// End-to-end test of the simulated Alexa+ path WITHOUT Bedrock:
+// End-to-end test of the simulated Alexa+ path WITHOUT a real model:
 //   runAssistant → real MCP client → HTTP → real PetCheck server (memory storage)
-// Bedrock is replaced by a scripted fake that asks for the tools a real model would.
+// The model is replaced by a scripted fake that asks for the tools a real model would.
+// Also: conversations kept server-side (sessions) and the device location for the care network.
 //   npm run test:assistant
 import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
@@ -9,6 +10,7 @@ process.env.API_KEY ??= "test";
 const { app } = await import("../src/app.js");
 const { runAssistant } = await import("../src/assistant.js");
 type ConverseFn = import("../src/assistant.js").ConverseFn;
+type Message = import("../src/assistant.js").Message;
 
 const server = app.listen(0);
 await new Promise((r) => server.once("listening", r));
@@ -17,7 +19,7 @@ const mcpUrl = `http://localhost:${(server.address() as AddressInfo).port}/mcp`;
 /** A fake model: first asks for one tool call, then answers from the tool result. */
 function scripted(tool: string, input: Record<string, unknown>, finalText: (toolResult: string) => string): ConverseFn {
   return async (req) => {
-    assert.equal(req.toolConfig.tools.length, 6, "the model is offered all 6 PetCheck tools (from MCP tools/list)");
+    assert.equal(req.toolConfig.tools.length, 10, "the model is offered all 10 PetCheck tools (from MCP tools/list)");
     assert.ok(req.toolConfig.tools.every((t) => !("$schema" in (t.toolSpec.inputSchema.json as object))), "no $schema in tool schemas");
     assert.match(req.system[0].text, /The person speaking right now is/);
     const last = req.messages[req.messages.length - 1];
@@ -115,6 +117,53 @@ try {
   const dinner = today.pets.find((p: { name: string }) => p.name === "Biscuit").slots.find((s: { label: string }) => s.label === "dinner");
   assert.equal(dinner.state, "done");
   console.log("✔ demo clock 5:40 PM → Biscuit's dinner logged at 5:40 PM:", r.reply);
+
+  // 9. Multi-turn: with a session, turn 2 sees turn 1's tool call and its result, not only the words.
+  const calls: Message[][] = [];
+  const capture = (fn: ConverseFn): ConverseFn => async (req) => {
+    calls.push(JSON.parse(JSON.stringify(req.messages)));
+    return fn(req);
+  };
+  const sid = "test-session-0001";
+  r = await runAssistant(
+    { text: "How's Mochi today?", speaker: "Mom", sessionId: sid },
+    { mcpUrl, apiKey: "test", converse: capture(scripted("get_status", { pet: "Mochi" }, (t) => t)) },
+  );
+  assert.equal(r.sessionId, sid);
+  assert.equal(r.turnsInContext, 0);
+  r = await runAssistant(
+    { text: "How about Biscuit?", speaker: "Mom", sessionId: sid },
+    { mcpUrl, apiKey: "test", converse: capture(scripted("get_status", { pet: "Biscuit" }, (t) => t)) },
+  );
+  assert.equal(r.turnsInContext, 1);
+  const turn2 = calls[2]; // turn 1 made two model calls
+  assert.deepEqual(turn2.map((m) => m.role), ["user", "assistant", "user", "assistant", "user"]);
+  assert.ok(turn2.some((m) => m.content.some((c) => "toolUse" in c && c.toolUse.name === "get_status")), "turn 1's tool call");
+  assert.ok(turn2.some((m) => m.content.some((c) => "toolResult" in c && /Mochi/.test(c.toolResult.content[0].text))), "turn 1's tool result");
+  console.log("✔ session: turn 2 is sent turn 1's get_status call and result →", r.reply.slice(0, 60) + "…");
+
+  r = await runAssistant({ text: "Hi", speaker: "Dad", sessionId: "test-session-0002" }, { mcpUrl, apiKey: "test", model: blocked });
+  assert.equal(r.turnsInContext, 0, "another device starts its own conversation");
+  r = await runAssistant({ text: "Hi", speaker: "Dad", sessionId: "../../etc/passwd" }, { mcpUrl, apiKey: "test", model: blocked });
+  assert.equal(r.sessionId, undefined, "an id that isn't a plain token is ignored");
+  console.log("✔ sessions are per conversation; unsafe ids are ignored");
+
+  // 10. A sitter's device location reaches the MCP server and the care network searches from there.
+  r = await runAssistant(
+    { text: "Any dog walking jobs near me?", speaker: "Sam", role: "sitter", location: { lat: 42.286, lng: -83.747, label: "Kerrytown" } },
+    {
+      mcpUrl,
+      apiKey: "test",
+      converse: async (req) => {
+        assert.match(req.system[0].text, /Sam, a pet sitter/);
+        return scripted("find_care_requests", { services: ["walk"], max_distance_miles: 2, sitter: "Sam" }, (t) => t)(req);
+      },
+    },
+  );
+  const find = r.trace.find((t) => t.tool === "find_care_requests")!;
+  assert.equal((find.response as { result: { structuredContent: { searchedFrom: string } } }).result.structuredContent.searchedFrom, "Kerrytown");
+  assert.match(r.reply, /^I found \d jobs?\. R-1031: dog walks for Luna, .*0\.5 miles away in Water Hill/);
+  console.log("✔ sitter on a phone in Kerrytown →", r.reply.slice(0, 90) + "…");
 
   console.log("\nAll assistant checks passed.");
 } finally {

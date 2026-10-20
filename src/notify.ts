@@ -1,9 +1,10 @@
 // Owner notifications via Amazon SNS (email, or SMS if you add a phone subscription).
 // Enabled when ALERT_TOPIC_ARN is set; otherwise the owner messages are only logged,
 // and the alerts are still stored and shown on the household page.
-// Sent: owner-level missed-task alerts, and the day-before vet visit reminders.
+// Sent: owner-level missed-task alerts, the day-before vet visit reminders, and a sitter
+// taking one of the household's care requests.
 
-import { isVetReminder, type Alert } from "./store.js";
+import { isCareAlert, isVetReminder, type Alert } from "./store.js";
 
 const TOPIC_ARN = process.env.ALERT_TOPIC_ARN;
 
@@ -14,11 +15,14 @@ export interface OwnerMessage {
 export type Publish = (msg: OwnerMessage) => Promise<void>;
 
 /** Which alerts reach the owner directly. */
-export const notifiesOwner = (a: Alert) => a.level === "owner" || isVetReminder(a);
+export const notifiesOwner = (a: Alert) => a.level === "owner" || isVetReminder(a) || isCareAlert(a);
 
 export function ownerMessage(a: Alert): OwnerMessage {
   if (isVetReminder(a)) {
     return { subject: `PetCheck: ${a.pet}'s vet visit is tomorrow`.slice(0, 100), message: a.message.replace(/^Reminder:\s*/, "") };
+  }
+  if (isCareAlert(a)) {
+    return { subject: `PetCheck: ${a.message.split(" took ")[0]} took your care request`.slice(0, 100), message: a.message };
   }
   return {
     subject: `PetCheck: ${a.pet} missed ${a.label}`.slice(0, 100),

@@ -42,7 +42,7 @@ const anthropicScript = (tool: string, input: object) => (r: Seen) => {
   const last = r.body.messages[r.body.messages.length - 1];
   const result = last.content.find((c: { type: string }) => c.type === "tool_result");
   if (!result) {
-    return { body: { stop_reason: "tool_use", content: [{ type: "thinking", thinking: "" }, { type: "tool_use", id: "toolu_1", name: tool, input }] } };
+    return { body: { stop_reason: "tool_use", content: [{ type: "thinking", thinking: "", signature: "sig-1" }, { type: "tool_use", id: "toolu_1", name: tool, input }] } };
   }
   return { body: { stop_reason: "end_turn", content: [{ type: "text", text: `Done. ${result.content}` }] } };
 };
@@ -67,7 +67,7 @@ try {
   assert.equal(o1.body.enable_thinking, false, "OPENAI_EXTRA_BODY is merged in");
   assert.equal(o1.body.messages[0].role, "system");
   assert.match(o1.body.messages[0].content, /The person speaking right now is Dad/);
-  assert.equal(o1.body.tools.length, 6, "all 6 MCP tools are offered");
+  assert.equal(o1.body.tools.length, 10, "all 10 MCP tools are offered");
   assert.ok(o1.body.tools.every((t: any) => t.type === "function" && t.function.parameters.type === "object" && !("$schema" in t.function.parameters)));
   const call = o2.body.messages.find((m: any) => m.role === "assistant");
   const result = o2.body.messages.find((m: any) => m.role === "tool");
@@ -108,13 +108,14 @@ try {
   assert.equal(a1.headers["anthropic-version"], "2023-06-01");
   assert.equal(a1.body.model, "fake-claude");
   assert.match(a1.body.system, /The person speaking right now is Mom/);
-  assert.deepEqual(a1.body.thinking, { type: "disabled" });
-  assert.equal(a1.body.tools.length, 6);
+  assert.deepEqual(a1.body.thinking, { type: "disabled" }, "default: no extended thinking");
+  assert.equal(a1.body.temperature, undefined, "no temperature: current Claude models reject it");
+  assert.equal(a1.body.tools.length, 10);
   assert.ok(a1.body.tools.every((t: any) => t.input_schema.type === "object"));
   assert.deepEqual(a1.body.messages.map((m: any) => m.role), ["user", "assistant", "user"], "earlier turns are sent as context");
   const use = a2.body.messages[3].content.find((c: any) => c.type === "tool_use");
   const res = a2.body.messages[4].content.find((c: any) => c.type === "tool_result");
-  assert.ok(!a2.body.messages[3].content.some((c: any) => c.type === "thinking"), "thinking blocks are not sent back");
+  assert.deepEqual(a2.body.messages[3].content[0], { type: "thinking", thinking: "", signature: "sig-1" }, "thinking goes back unchanged, before the tool_use");
   assert.equal(use.id, "toolu_1");
   assert.equal(res.tool_use_id, "toolu_1");
   assert.equal(res.is_error, undefined);
@@ -127,6 +128,14 @@ try {
   await runAssistant({ text: "I walked Rex", speaker: "Mom" }, { mcpUrl, apiKey: "test" });
   assert.equal(seen[1].body.messages[2].content[0].is_error, true);
   console.log("✔ Anthropic-compatible: failed tool is sent with is_error: true");
+
+  process.env.ANTHROPIC_EXTRA_BODY = '{"thinking":{"type":"between_tools"}}'; // what Claude Sonnet 5.5 needs
+  script = anthropicScript("get_status", {});
+  seen.length = 0;
+  await runAssistant({ text: "What's left today?", speaker: "Mom" }, { mcpUrl, apiKey: "test" });
+  assert.deepEqual(seen[0].body.thinking, { type: "between_tools" });
+  delete process.env.ANTHROPIC_EXTRA_BODY;
+  console.log("✔ ANTHROPIC_EXTRA_BODY replaces the default thinking setting");
 
   // 3. Errors: a bad request is never hidden; an unavailable model falls back to rules only in "auto".
   script = () => ({ status: 400, body: { error: { message: "tools[0] is invalid" } } });

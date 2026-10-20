@@ -14,6 +14,7 @@ import {
   localToDate,
   spokenDate,
 } from "./clock.js";
+import type { CareRequest, Claim } from "./market.js";
 
 export const ACTIVITIES = ["feed", "walk", "meds", "litter", "water", "groom", "other"] as const;
 export type Activity = (typeof ACTIVITIES)[number];
@@ -80,7 +81,7 @@ export interface Alert {
   pet: string;
   level: AlertLevel;
   date: string; // household-local date of the missed task (or of the vet reminder)
-  slot: string; // e.g. "dinner@18:00" — identifies the routine task; "vet@<visit id>" for a vet reminder
+  slot: string; // e.g. "dinner@18:00" — identifies the routine task; "vet@<visit id>" / "request@<request id>" otherwise
   label: string;
   time: string; // HH:MM the task was due (the visit time for a vet reminder, if known)
   at: string; // UTC ISO when the alert was raised
@@ -88,10 +89,10 @@ export interface Alert {
 }
 
 let seq = 0;
-const newId = (prefix: string) => `${prefix}_${Date.now().toString(36)}_${(seq++).toString(36)}`;
+export const newId = (prefix: string) => `${prefix}_${Date.now().toString(36)}_${(seq++).toString(36)}`;
 
 // ---------------------------------------------------------------------------
-// In-memory data (replaced by DynamoDB in the next milestone)
+// In-memory data, loaded from and saved to the storage mode (see storage.ts)
 // ---------------------------------------------------------------------------
 
 const db = {
@@ -100,27 +101,38 @@ const db = {
   notes: [] as Note[],
   visits: [] as VetVisit[],
   alerts: [] as Alert[],
+  // The care network (market.ts): requests from every household, and sitters' claims on them.
+  requests: [] as CareRequest[],
+  claims: [] as Claim[],
 };
 
-export type Kind = "pet" | "event" | "note" | "visit" | "alert";
-export type Change = { kind: Kind; item: Pet | CareEvent | Note | VetVisit | Alert };
+type Item = Pet | CareEvent | Note | VetVisit | Alert | CareRequest | Claim;
+export type Kind = "pet" | "event" | "note" | "visit" | "alert" | "request" | "claim";
+export type Change = { kind: Kind; item: Item };
 
 /** New records created since the last takeChanges() — what a persistent store must save. */
 let changes: Change[] = [];
 
-function insert(kind: "pet", item: Pet): void;
-function insert(kind: "event", item: CareEvent): void;
-function insert(kind: "note", item: Note): void;
-function insert(kind: "visit", item: VetVisit): void;
-function insert(kind: "alert", item: Alert): void;
-function insert(kind: Kind, item: Pet | CareEvent | Note | VetVisit | Alert): void {
+export function insert(kind: "pet", item: Pet): void;
+export function insert(kind: "event", item: CareEvent): void;
+export function insert(kind: "note", item: Note): void;
+export function insert(kind: "visit", item: VetVisit): void;
+export function insert(kind: "alert", item: Alert): void;
+export function insert(kind: "request", item: CareRequest): void;
+export function insert(kind: "claim", item: Claim): void;
+export function insert(kind: Kind, item: Item): void {
   if (kind === "pet") db.pets.push(item as Pet);
   else if (kind === "event") db.events.push(item as CareEvent);
   else if (kind === "note") db.notes.push(item as Note);
   else if (kind === "alert") db.alerts.push(item as Alert);
+  else if (kind === "request") db.requests.push(item as CareRequest);
+  else if (kind === "claim") db.claims.push(item as Claim);
   else db.visits.push(item as VetVisit);
   changes.push({ kind, item });
 }
+
+/** The care network's records (read by market.ts). */
+export const marketRecords = () => ({ requests: db.requests, claims: db.claims });
 
 /** Return and clear the list of records created since the last call. */
 export function takeChanges(): Change[] {
@@ -136,12 +148,16 @@ export function loadState(state: {
   notes: Note[];
   visits: VetVisit[];
   alerts?: Alert[];
+  requests?: CareRequest[];
+  claims?: Claim[];
 }): void {
   db.pets = [...state.pets];
   db.events = [...state.events];
   db.notes = [...state.notes];
   db.visits = [...state.visits];
   db.alerts = [...(state.alerts ?? [])];
+  db.requests = [...(state.requests ?? [])];
+  db.claims = [...(state.claims ?? [])];
   changes = [];
 }
 
@@ -152,6 +168,8 @@ export function resetStore(): void {
   db.notes = [];
   db.visits = [];
   db.alerts = [];
+  db.requests = [];
+  db.claims = [];
 }
 
 export function seedDemoData(): void {
@@ -275,7 +293,7 @@ export function findPet(name?: string): Pet {
 }
 
 /** "dad" -> "Dad", "mary jane" -> "Mary Jane"; empty -> "Someone". */
-function personName(raw?: string): string {
+export function personName(raw?: string): string {
   const t = raw?.trim();
   if (!t) return "Someone";
   return t.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
@@ -323,7 +341,7 @@ function editDistance(a: string, b: string): number {
   return row[b.length];
 }
 
-function joinNames(names: string[]): string {
+export function joinNames(names: string[]): string {
   if (names.length <= 1) return names.join("");
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
@@ -752,6 +770,8 @@ function remindVetVisits(today: string, nowMin: number): Alert[] {
 }
 
 export const isVetReminder = (a: Alert) => a.slot.startsWith("vet@");
+/** "Sam took your care request" (market.ts, slot "request@<request id>"). */
+export const isCareAlert = (a: Alert) => a.slot.startsWith("request@");
 
 function lateText(min: number): string {
   if (min < 90) return `${min} minutes`;

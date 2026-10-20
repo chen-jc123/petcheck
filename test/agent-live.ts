@@ -1,6 +1,7 @@
 // Acceptance run against the REAL configured model (reads .env; see .env.example):
-// the household acceptance scenarios, each on fresh demo data, through the real
-// MCP client and server. Prints every turn, the tool calls and the data changes.
+// the household and care network scenarios, each on fresh demo data, through the real
+// MCP client and server, with conversations kept server-side (sessions) as on the page.
+// Prints every turn, the tool calls and the data changes.
 //   npm run test:live              # engine from .env / ASSISTANT_ENGINE
 //   npm run test:live -- anthropic # force an engine: openai | anthropic | bedrock | rules
 // Exits 1 if any scenario fails. Voice input is not covered (try it in the browser).
@@ -15,8 +16,16 @@ process.env.API_KEY = "live-test";
 const { app } = await import("../src/app.js");
 const { runAssistant } = await import("../src/assistant.js");
 const { seedDemoData, seedTodaySoFar, takeChanges, todayView } = await import("../src/store.js");
+const { householdRequests, postCareRequest, seedMarket } = await import("../src/market.js");
+const { offsetForTime, setDemoOffset, withDemoTime } = await import("../src/clock.js");
+/** Every scenario runs on the demo clock at 5:40 PM, so results don't depend on when the suite runs. */
+const DEMO_TIME = "17:40";
 type Reply = Awaited<ReturnType<typeof runAssistant>>;
-type History = { role: "user" | "assistant"; text: string }[];
+/** A conversation on one device, kept server-side. */
+type History = { sessionId: string };
+type Device = { role?: "household" | "sitter"; location?: { lat: number; lng: number; label?: string } };
+/** Sam the pet sitter's phone, in Kerrytown (about 0.4 miles from the household). */
+const SAMS_PHONE: Device = { role: "sitter", location: { lat: 42.286, lng: -83.747, label: "Kerrytown" } };
 
 const server = app.listen(0);
 await new Promise((r) => server.once("listening", r));
@@ -24,21 +33,28 @@ const mcpUrl = `http://localhost:${(server.address() as AddressInfo).port}/mcp`;
 
 /** Fresh household for every scenario: last week's history, today tidy up to now, dinners still open. */
 function freshDay() {
+  setDemoOffset(offsetForTime("17:35"));
   seedDemoData();
+  seedMarket();
   seedTodaySoFar();
+  setDemoOffset(0);
   takeChanges();
 }
 const events = () => todayView().events;
 const visits = () => todayView().upcomingVisits;
 
 let engineLine = "";
-/** One spoken turn; prints it and returns the reply plus the updated history. */
-async function say(speaker: string, text: string, history: History = []): Promise<{ r: Reply; history: History }> {
-  const r = await runAssistant({ text, speaker, history }, { mcpUrl, apiKey: "live-test" });
+let conversations = 0;
+/** One spoken turn; continues `history`'s conversation, or starts a new one. */
+async function say(speaker: string, text: string, history?: History, device: Device = {}): Promise<{ r: Reply; history: History }> {
+  const sessionId = history?.sessionId ?? `live-${Date.now()}-${++conversations}`;
+  const r = await withDemoTime(DEMO_TIME, () =>
+    runAssistant({ text, speaker, sessionId, ...device }, { mcpUrl, apiKey: "live-test", demoTime: DEMO_TIME }),
+  );
   engineLine ||= `${r.engineLabel} · ${r.model}`;
   const tools = r.toolCalls.map((t) => `${t.name}(${JSON.stringify(t.input)})${t.isError ? " ✗" : ""}`).join(" → ") || "(none)";
   console.log(`  ${speaker}: “${text}”\n    → ${r.reply}\n    tools: ${tools} · ${r.engine} · ${r.ms} ms`);
-  return { r, history: [...history, { role: "user", text }, { role: "assistant", text: r.reply }] };
+  return { r, history: { sessionId } };
 }
 
 const called = (r: Reply, name: string, pet?: string) =>
@@ -103,17 +119,22 @@ try {
     return true;
   });
 
-  await scenario("Duplicate: confirm and cancel", async () => {
-    await say("Dad", "I fed Mochi");
+  await scenario("Duplicate on a shared device: confirm and cancel", async () => {
+    // Dad and Emma talk to the same kitchen device, so they share one conversation.
+    const dad = await say("Dad", "I fed Mochi");
     const afterDad = events().length;
-    const dup = await say("Emma", "I fed Mochi");
+    const dup = await say("Emma", "I fed Mochi", dad.history);
     const asked = dup.r.toolCalls.some((t) => t.name === "log_care" && /log it again\?/.test(t.result));
     if (!asked || events().length !== afterDad || !/\?/.test(dup.r.reply)) return "Emma got no duplicate question (or it was logged anyway)";
-    await say("Emma", "No, never mind", dup.history);
+    if (/\b(sorry|mistake|apolog)/i.test(dup.r.reply)) return "Alexa thought Dad's line was Emma's (apologized)";
+    const no = await say("Emma", "No, never mind", dup.history);
     if (events().length !== afterDad) return "logged after she said no";
-    const dup2 = await say("Emma", "I fed Mochi");
+    const dup2 = await say("Emma", "I fed Mochi", no.history);
     await say("Emma", "Yes, log it", dup2.history);
-    if (events().length !== afterDad + 1 || events()[0].by !== "Emma") return "no log for Emma after she said yes";
+    // On the demo clock both feedings can share a timestamp, so look for Emma's rather than the newest.
+    if (events().length !== afterDad + 1 || !events().some((e) => e.pet === "Mochi" && e.activity === "feed" && e.by === "Emma")) {
+      return "no log for Emma after she said yes";
+    }
     return true;
   });
 
@@ -142,6 +163,65 @@ try {
     if (new Date(`${v.date}T12:00:00Z`).getUTCDay() !== 2) return `date ${v.date} is not a Tuesday`;
     if (v.time !== "10:00") return `time is ${v.time ?? "missing"}, expected 10:00`;
     if (!called(r, "add_vet_visit", "Mochi")) return "no add_vet_visit call";
+    return true;
+  });
+
+  await scenario("Pronoun from an earlier turn", async () => {
+    const before = events().length;
+    const a = await say("Mom", "What's left for Mochi today?");
+    const b = await say("Mom", "OK, I just gave her dinner.", a.history);
+    if (!called(a.r, "get_status", "Mochi")) return "no status lookup for Mochi";
+    if (!called(b.r, "log_care", "Mochi")) return "“her” wasn't resolved to Mochi from the previous turn";
+    if (!events().slice(0, events().length - before).some((e) => e.pet === "Mochi" && e.activity === "feed" && e.by === "Mom")) return "no stored feeding of Mochi by Mom";
+    return true;
+  });
+
+  await scenario("Post a care request: draft, then confirm", async () => {
+    const a = await say("Mom", "We're away this coming Saturday and Sunday. Can you find someone to walk Biscuit twice a day?");
+    const draft = a.r.toolCalls.find((t) => t.name === "post_care_request");
+    if (!draft) return "no post_care_request";
+    if ((draft.input as { confirm?: boolean }).confirm) return "posted without reading the draft back first";
+    if (householdRequests().length) return "the draft was published before they said yes";
+    if (!/\?/.test(a.r.reply)) return "didn't ask whether to post it";
+    const b = await say("Mom", "Yes, post it.", a.history);
+    const [req] = householdRequests();
+    if (!req) return "nothing posted after yes";
+    if (req.service !== "walk" || req.pets.map((p) => p.name).join() !== "Biscuit") return `wrong form: ${req.service} for ${req.pets.map((p) => p.name)}`;
+    const weekday = (d: string) => new Date(`${d}T12:00:00Z`).getUTCDay();
+    if (weekday(req.startDate) !== 6 || weekday(req.endDate) !== 0) return `dates ${req.startDate}–${req.endDate} aren't a Saturday–Sunday`;
+    if (req.times.length !== 2) return `${req.times.length} visits a day, expected 2`;
+    if (!called(b.r, "post_care_request")) return "the confirming call failed";
+    return true;
+  });
+
+  await scenario("Sitter finds and takes a job, then logs a visit", async () => {
+    // The household needs an evening walk today; Sam is free tonight.
+    const posted = postCareRequest({ pets: ["Biscuit"], service: "walk", start_date: todayView().date, times: ["18:00"], by: "Mom", confirm: true });
+    takeChanges();
+    const a = await say("Sam", "Any dog walking jobs near me today? At least $20 a visit.", undefined, SAMS_PHONE);
+    const find = a.r.toolCalls.find((t) => t.name === "find_care_requests");
+    if (!find) return "no find_care_requests";
+    if (!find.result.includes(posted.request.code)) return `the household's request ${posted.request.code} wasn't found`;
+    if (!/Biscuit/.test(a.r.reply)) return "Biscuit's job wasn't read back";
+    const b = await say("Sam", "Great, I'll take the one for Biscuit.", a.history, SAMS_PHONE);
+    if (!b.r.toolCalls.some((t) => t.name === "accept_care_request" && !t.isError)) return "no accept_care_request";
+    const req = householdRequests().find((r) => r.code === posted.request.code);
+    if (req?.state !== "taken" || req.sitter !== "Sam") return "the request isn't taken by Sam";
+    const before = events().length;
+    const c = await say("Sam", "I just walked Biscuit.", b.history, SAMS_PHONE);
+    if (!called(c.r, "log_care", "Biscuit")) return "the visit wasn't logged";
+    if (!events().slice(0, events().length - before).some((e) => e.pet === "Biscuit" && e.activity === "walk" && e.by === "Sam")) return "no stored walk by Sam";
+    return true;
+  });
+
+  await scenario("Household asks who took the request", async () => {
+    const posted = postCareRequest({ pets: ["Biscuit"], service: "walk", start_date: todayView().date, by: "Mom", confirm: true });
+    const { acceptCareRequest } = await import("../src/market.js");
+    acceptCareRequest({ code: posted.request.code, sitter: "Sam" });
+    takeChanges();
+    const { r } = await say("Dad", "Has anyone taken our request for Biscuit yet?");
+    if (!r.toolCalls.some((t) => t.name === "care_request_status" && !t.isError)) return "no care_request_status";
+    if (!/\bSam\b/.test(r.reply)) return "didn't say Sam took it";
     return true;
   });
 } finally {

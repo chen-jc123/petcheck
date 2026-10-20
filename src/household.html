@@ -42,7 +42,7 @@
   @media (max-width: 760px) {
     .grid { display: flex; flex-direction: column; align-items: stretch; }
     .col { display: contents; }
-    #hero { order: 1; } #alerts-card { order: 2; } #timeline-card { order: 3; } #pets-card { order: 4; }
+    #hero { order: 1; } #alerts-card, #requests-card { order: 2; } #timeline-card { order: 3; } #pets-card { order: 4; }
     #helpers-card { order: 5; } #activity-card { order: 6; } #notes-card { order: 7; } #visits-card { order: 8; } #demo { order: 9; }
   }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; box-shadow: var(--shadow); }
@@ -173,6 +173,11 @@
   @keyframes flash { 0% { background: var(--done-bg); } 100% { background: transparent; } }
 
   .note { font-size: 14px; padding: 6px 0; } .note + .note { border-top: 1px solid var(--line); }
+  .req { font-size: 14px; padding: 8px 0; } .req + .req { border-top: 1px solid var(--line); }
+  .req-top { display: flex; gap: 8px; align-items: baseline; margin-bottom: 2px; }
+  .req-state { margin-left: auto; font-size: 12px; font-weight: 650; color: var(--due); }
+  .req.taken .req-state { color: var(--done); } .req.past { opacity: .6; }
+  .req .meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
   .note .meta { color: var(--muted); font-size: 12px; }
 
   details.demo summary { cursor: pointer; color: var(--muted); font-size: 13px; }
@@ -224,6 +229,7 @@
       </div>
       <div class="col">
         <div class="card" id="alerts-card"><h2>Alerts <span class="count" id="alerts-count"></span></h2><div id="alerts"></div></div>
+        <div class="card" id="requests-card" hidden><h2>Care requests</h2><div id="requests"></div></div>
         <div class="card" id="helpers-card" hidden><h2>This week's helpers</h2><div id="helpers"></div></div>
         <div class="card" id="activity-card"><h2>Activity</h2><ul class="feed" id="feed"></ul></div>
         <details class="demo card" id="demo">
@@ -584,7 +590,8 @@
     function alertEl(a) {
       var box = el("div", "alert " + a.level + (!firstLoad && !seenA[a.id] ? " new" : ""));
       var inner = el("div");
-      inner.appendChild(el("div", "tag", (a.level === "owner" ? "Owner alert" : "Reminder") + " · " + spokenTime(a.at)));
+      var tag = a.slot.indexOf("request@") === 0 ? "Care network" : a.level === "owner" ? "Owner alert" : "Reminder";
+      inner.appendChild(el("div", "tag", tag + " · " + spokenTime(a.at)));
       inner.appendChild(el("div", "msg", a.message.replace(/^Reminder:\s*/, "")));
       box.appendChild(inner);
       return box;
@@ -619,6 +626,19 @@
       box.appendChild(el("div", "", "“" + n.text + "” — " + n.pet));
       box.appendChild(el("div", "meta", n.by + " · " + spokenTime(n.at)));
       notes.appendChild(box);
+    });
+
+    // Care requests this household posted, and who took them.
+    var reqs = v.careRequests || [], rbox = $("requests"); rbox.textContent = "";
+    $("requests-card").hidden = !reqs.length;
+    reqs.forEach(function (r) {
+      var box = el("div", "req " + r.state), top = el("div", "req-top");
+      top.appendChild(el("b", null, r.code));
+      top.appendChild(el("span", "req-state", r.state === "taken" ? "✓ Taken by " + r.sitter : r.state === "past" ? "Ended" : "Waiting for a sitter"));
+      box.appendChild(top);
+      box.appendChild(el("div", null, cap(r.summary)));
+      box.appendChild(el("div", "meta", "Posted by " + r.postedBy + " · " + spokenTime(r.postedAt) + (r.location.source === "device" ? " · located from " + r.location.label : "")));
+      rbox.appendChild(box);
     });
 
     var visits = $("visits"); visits.textContent = "";

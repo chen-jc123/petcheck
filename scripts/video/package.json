@@ -1,0 +1,13 @@
+{
+  "name": "petcheck-video",
+  "private": true,
+  "type": "module",
+  "description": "Makes PetCheck's demo video with AI: narration, a scripted run of the real app recorded in a browser, ffmpeg assembly.",
+  "scripts": {
+    "setup": "npm install && npx playwright install chromium",
+    "make": "node make-video.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

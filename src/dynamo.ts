@@ -2,8 +2,10 @@
 //
 //   pk = HH#<householdId>
 //   sk = PET#<id> | EVT#<isoTime>#<id> | NOTE#<isoTime>#<id> | VET#<date>#<id> | ALERT#<isoTime>#<id>
+//   pk = MARKET (the care network, shared by every household)
+//   sk = REQ#<isoTime>#<id> | CLAIM#<isoTime>#<id>
 //
-// One Query loads a whole household (small, so this stays cheap), and new
+// One Query loads a whole household and one the care network (both small, so this stays cheap), and new
 // records are written with BatchWrite. Records are only ever added, never
 // updated, which keeps concurrent writes from different devices safe.
 
@@ -21,6 +23,8 @@ export const doc = DynamoDBDocumentClient.from(new DynamoDBClient({ region: REGI
 });
 
 const pk = () => `HH#${HOUSEHOLD_ID}`;
+export const MARKET_PK = "MARKET";
+const isMarket = (kind: Kind) => kind === "request" || kind === "claim";
 
 function sortKey(c: Change): string {
   const it = c.item as unknown as Record<string, string>;
@@ -35,11 +39,20 @@ function sortKey(c: Change): string {
       return `VET#${it.date}#${it.id}`;
     case "alert":
       return `ALERT#${it.at}#${it.id}`;
+    case "request":
+      return `REQ#${it.postedAt}#${it.id}`;
+    case "claim":
+      return `CLAIM#${it.at}#${it.id}`;
   }
 }
 
 /** All raw items for this household (handles pagination). */
 export async function queryHousehold(): Promise<Record<string, unknown>[]> {
+  return queryPartition(pk());
+}
+
+/** All raw items under one partition key (handles pagination). */
+export async function queryPartition(partition: string): Promise<Record<string, unknown>[]> {
   const items: Record<string, unknown>[] = [];
   let startKey: Record<string, unknown> | undefined;
   do {
@@ -47,7 +60,7 @@ export async function queryHousehold(): Promise<Record<string, unknown>[]> {
       new QueryCommand({
         TableName: TABLE_NAME,
         KeyConditionExpression: "pk = :pk",
-        ExpressionAttributeValues: { ":pk": pk() },
+        ExpressionAttributeValues: { ":pk": partition },
         ExclusiveStartKey: startKey,
       }),
     );
@@ -73,14 +86,17 @@ export async function batchWrite(requests: Record<string, unknown>[]): Promise<v
 export function dynamoBackend(): Backend {
   return {
     async loadAll(): Promise<HouseholdState> {
-      const state: HouseholdState = { pets: [], events: [], notes: [], visits: [], alerts: [] };
-      for (const raw of await queryHousehold()) {
+      const state: HouseholdState = { pets: [], events: [], notes: [], visits: [], alerts: [], requests: [], claims: [] };
+      const [household, market] = await Promise.all([queryHousehold(), queryPartition(MARKET_PK)]);
+      for (const raw of [...household, ...market]) {
         const { pk: _pk, sk: _sk, kind, ...record } = raw as Record<string, unknown> & { kind: Kind };
         if (kind === "pet") state.pets.push(record as never);
         else if (kind === "event") state.events.push(record as never);
         else if (kind === "note") state.notes.push(record as never);
         else if (kind === "visit") state.visits.push(record as never);
         else if (kind === "alert") state.alerts.push(record as never);
+        else if (kind === "request") state.requests.push(record as never);
+        else if (kind === "claim") state.claims.push(record as never);
       }
       // Pets come back in sort-key order; keep the order they were added.
       state.pets.sort((a, b) => a.id.localeCompare(b.id));
@@ -90,7 +106,7 @@ export function dynamoBackend(): Backend {
     async saveChanges(changes: Change[]): Promise<void> {
       await batchWrite(
         changes.map((c) => ({
-          PutRequest: { Item: { pk: pk(), sk: sortKey(c), kind: c.kind, ...c.item } },
+          PutRequest: { Item: { pk: isMarket(c.kind) ? MARKET_PK : pk(), sk: sortKey(c), kind: c.kind, ...c.item } },
         })),
       );
     },

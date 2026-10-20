@@ -9,7 +9,7 @@
 
 | Tool / API / SDK | What we used it for |
 |---|---|
-| MCP TypeScript SDK (`@modelcontextprotocol/sdk` 1.31) | The PetCheck MCP server (6 tools, Streamable HTTP, stateless) and the MCP client inside the simulated Alexa+ |
+| MCP TypeScript SDK (`@modelcontextprotocol/sdk` 1.31) | The PetCheck MCP server (10 tools, Streamable HTTP, stateless) and the MCP client inside the simulated Alexa+ |
 | MCP Inspector (web UI and CLI) | Testing tools during development; `npm run check:mcp` protocol check |
 | Alexa+ MCP Toolkit docs and `alexa-ai` CLI setup | Designing the add-on: transport, OAuth 2.1, listing limits; CLI install was blocked (private preview) |
 | AWS Lambda (Function URL, Node.js 22, arm64) | Hosts the MCP endpoint, household API, pages and OAuth endpoints |
@@ -18,9 +18,9 @@
 | Amazon SNS | Emails the owner when a task is an hour late, and the day before a vet visit |
 | AWS IAM | Least-privilege roles for Lambda and the scheduler |
 | Amazon Bedrock (Converse API, Nova Lite) | Built in as a model engine; our account is still waiting for access |
-| Amazon Polly (generative voice) | Narration for the demo video |
+| Amazon Polly (generative voice) | Narration for our first demo cut (`npm run narration:polly`) |
 | Web Speech API (browser) | Speech in and out on the simulated Alexa+ page |
-| An OpenAI-compatible model API (Qwen via Alibaba Cloud Model Studio) | The language model in the demo while Bedrock access is pending |
+| Third-party language models through OpenAI- and Anthropic-compatible APIs (a relay, and Alibaba Cloud Model Studio) | The model in the demo while Bedrock access is pending |
 
 ## AWS Builder: which AWS services and how
 
@@ -31,7 +31,7 @@ server is stateless. EventBridge Scheduler invokes the same function every 5 min
 `{"petcheck": "check-missed"}`; alerts are stored in DynamoDB once, and owner alerts and vet reminders are
 published to an SNS topic that emails the owner. IAM roles allow only the `petcheck` table, the alert topic
 and Bedrock invoke. `npm run deploy` creates or updates all of it. Bedrock (Converse with tool use) is wired
-in as a model engine, and Polly generated the video narration.
+in as a model engine, and Polly narrated our first demo cut.
 
 ---
 
@@ -44,7 +44,7 @@ in as a model engine, and Polly generated the video narration.
 - **What needs work:** the Node `StreamableHTTPServerTransport` silently fails behind `serverless-http` on
   Lambda; nothing in the docs warns about it, and it took about 30 minutes to diagnose (FL-005). A "deploy to
   AWS Lambda" recipe using the web-standard transport would save people the detour.
-- **Onboarding:** fast. The skeleton with all 6 tools was working the first evening.
+- **Onboarding:** fast. The skeleton with the first 6 tools was working the first evening.
 - **Again?** Yes: one server works for Alexa+ and any other MCP client.
 
 ## MCP Inspector

@@ -2,23 +2,20 @@
 // Simulates Lambda: every request may land on a fresh container with empty memory.
 //   npm run test:storage
 import assert from "node:assert/strict";
-import { persistentStorage, type Backend, type HouseholdState } from "../src/storage.js";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { addRecord, emptyState, fileBackend, persistentStorage, type Backend, type HouseholdState } from "../src/storage.js";
 import { getStatus, logCare, resetStore, weeklySummary, type Change } from "../src/store.js";
+import { acceptCareRequest, careRequestStatus, findCareRequests, postCareRequest } from "../src/market.js";
 
 // A fake "table": just the list of every record ever saved.
 const table: Change[] = [];
 let writes = 0;
 const fake: Backend = {
   async loadAll(): Promise<HouseholdState> {
-    const s: HouseholdState = { pets: [], events: [], notes: [], visits: [], alerts: [] };
-    for (const c of table) {
-      const copy = JSON.parse(JSON.stringify(c.item));
-      if (c.kind === "pet") s.pets.push(copy);
-      if (c.kind === "event") s.events.push(copy);
-      if (c.kind === "note") s.notes.push(copy);
-      if (c.kind === "visit") s.visits.push(copy);
-      if (c.kind === "alert") s.alerts.push(copy);
-    }
+    const s = emptyState();
+    for (const c of table) addRecord(s, c.kind, JSON.parse(JSON.stringify(c.item)));
     return s;
   },
   async saveChanges(changes) {
@@ -64,5 +61,33 @@ const [a, b] = await Promise.all([
 assert.equal(a.status, "logged");
 assert.equal(b.status, "needs_confirmation");
 console.log("✔ concurrent requests serialized correctly");
+
+// The care network persists like everything else: a request posted on one container is
+// found and taken on another, and the household sees who took it on a third.
+assert.ok(table.some((c) => c.kind === "request"), "sample care requests were saved with the demo data");
+const nextWeek = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
+const posted = await coldStart().run(() => postCareRequest({ service: "walk", start_date: nextWeek, by: "Mom", confirm: true }));
+const found = await coldStart().run(() => findCareRequests({ services: ["walk"], from_date: nextWeek, to_date: nextWeek, sitter: "Sam" }));
+assert.ok(found.matches.some((m) => m.code === posted.request.code), found.message);
+await coldStart().run(() => acceptCareRequest({ code: posted.request.code, sitter: "Sam" }));
+const status2 = await coldStart().run(() => careRequestStatus({}));
+assert.match(status2.message, new RegExp(`${posted.request.code}.*taken by Sam`));
+console.log("✔ care request posted, found and taken across containers:", status2.message);
+
+// STORAGE=file: records are appended to a JSON Lines file and survive a restart.
+const dir = await mkdtemp(join(tmpdir(), "petcheck-"));
+const file = join(dir, "data.jsonl");
+try {
+  resetStore();
+  await persistentStorage(fileBackend(file), "file").run(() => logCare({ pet: "Mochi", activity: "feed", by: "Dad" }));
+  resetStore(); // "restart"
+  const again = await persistentStorage(fileBackend(file), "file").run(() => logCare({ pet: "Mochi", activity: "feed", by: "Emma" }));
+  assert.equal(again.status, "needs_confirmation", "Dad's feeding was read back from the file");
+  const lines = (await readFile(file, "utf8")).trim().split("\n");
+  assert.ok(lines.every((l) => JSON.parse(l).kind), "one JSON record per line");
+  console.log(`✔ STORAGE=file: ${lines.length} records in ${file.split("/").pop()}, read back after a restart`);
+} finally {
+  await rm(dir, { recursive: true, force: true });
+}
 
 console.log("\nAll storage checks passed.");

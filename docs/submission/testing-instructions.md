@@ -23,6 +23,15 @@ Try, in order:
 6. "Should I give Biscuit another dose?" PetCheck refers you to a vet and logs nothing.
 7. Missed tasks: on the right, **Demo controls → 19:00 → Show → Run missed-task check**. The reminder and
    the owner alert appear (on AWS, EventBridge Scheduler runs this check every 5 minutes on its own).
+8. The care network, as **Mom**: "We're away this Saturday and Sunday. Can someone walk Biscuit twice a
+   day?" Alexa reads back the request (location from the device, the household's address here); say "yes"
+   and it appears under **Care requests** on the right.
+9. Switch to **Sam · sitter** (his phone is set a few streets away): "Any dog walking jobs near me this
+   weekend? At least $20 a visit." then "I'll take the one for Biscuit." The household page shows
+   "Taken by Sam" and a Care network alert. Other households' requests in the list are sample data.
+
+Follow-ups work because each device's conversation is remembered for 30 minutes; **New conversation**
+starts over.
 
 The badge at the top of the Alexa panel shows which engine answered (the model name, or "rules" if the
 model can't be reached).
@@ -34,7 +43,7 @@ model can't be reached).
   `/.well-known/oauth-authorization-server`)
 - With the official MCP Inspector, from a clone of the repo:
   `API_KEY=<HOUSEHOLD-KEY> npm run check:mcp -- https://<FUNCTION-URL>/mcp`
-  (lists the 6 tools, calls a read tool, a write tool and an invalid one).
+  (lists the 10 tools, calls a read tool, a write tool and an invalid one).
 
 ## Run it locally (about 2 minutes)
 

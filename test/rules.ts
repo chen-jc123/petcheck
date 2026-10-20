@@ -41,6 +41,8 @@ check("yes", /^log_care .*"pet":"Mochi".*"activity":"feed".*"confirm":true/, {
 check("no thanks", /^say: Okay, I won't log it again/, {
   previousReply: "Emma already fed Mochi at 7:52 AM, just a minute ago. Do you want me to log it again?",
 });
+check("Can you find a sitter to walk Biscuit this weekend?", /^say: Posting and finding care requests needs the AI assistant/);
+check("Find me dog walking jobs near here", /^say: Posting and finding care requests needs the AI assistant/);
 check("hello", /^say: Hi Dad/);
 check("blah blah", /^say: Sorry, I didn't catch that/);
 

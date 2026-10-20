@@ -46,7 +46,7 @@ console.log("✔ initialize:", JSON.parse(r.body!).result.serverInfo);
 r = await http(event("POST", "/mcp", rpc(2, "tools/list"), auth));
 assert.equal(r.statusCode, 200, r.body);
 const names = JSON.parse(r.body!).result.tools.map((t: { name: string }) => t.name);
-assert.equal(names.length, 6);
+assert.equal(names.length, 10);
 console.log("✔ tools/list:", names.join(", "));
 
 r = await http(event("POST", "/mcp", rpc(3, "tools/call", { name: "log_care", arguments: { pet: "Mochi", activity: "feed", by: "Dad" } }), auth));

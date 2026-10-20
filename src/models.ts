@@ -6,7 +6,9 @@
 //   ASSISTANT_ENGINE=openai     any OpenAI-compatible Chat Completions API
 //                               OPENAI_BASE_URL, OPENAI_API_KEY, OPENAI_MODEL, optional OPENAI_EXTRA_BODY (JSON)
 //   ASSISTANT_ENGINE=anthropic  any Anthropic-compatible Messages API
-//                               ANTHROPIC_BASE_URL, ANTHROPIC_API_KEY, ANTHROPIC_MODEL
+//                               ANTHROPIC_BASE_URL, ANTHROPIC_API_KEY, ANTHROPIC_MODEL, optional ANTHROPIC_EXTRA_BODY (JSON)
+//
+// Both work through relay ("中转站") APIs as well as the vendors' own endpoints: only the base URL changes.
 //   ASSISTANT_ENGINE=bedrock    Amazon Bedrock Converse API (BEDROCK_MODEL_ID, AWS credentials)
 //   ASSISTANT_ENGINE=rules      the built-in rules engine, no model
 //   ASSISTANT_ENGINE=auto       (default) the first configured of openai, anthropic, bedrock,
@@ -35,6 +37,13 @@ const LABELS: Record<ModelEngine, string> = {
 /** One model call; a turn makes 2 or 3 of them, and Lambda gives the whole request 30 s. */
 const TIMEOUT_MS = Number(process.env.MODEL_TIMEOUT_MS ?? 12_000);
 
+/**
+ * Sent with every Anthropic-protocol request unless ANTHROPIC_EXTRA_BODY replaces it: a spoken
+ * reply can't wait for extended thinking. Right for Claude Haiku 5.5 and Qwen; Claude Sonnet 5.5
+ * needs {"thinking":{"type":"between_tools"}} and Claude Opus 5.5 {"output_config":{"effort":"low"}}.
+ */
+const DEFAULT_ANTHROPIC_EXTRA = { thinking: { type: "disabled" } };
+
 /** The model ASSISTANT_ENGINE selects, or undefined for the rules engine. Throws on incomplete settings. */
 export function modelConfig(setting: string, env: NodeJS.ProcessEnv = process.env): ModelConfig | undefined {
   const engine = setting === "auto" ? (env.OPENAI_API_KEY ? "openai" : env.ANTHROPIC_API_KEY ? "anthropic" : "bedrock") : setting;
@@ -45,12 +54,13 @@ export function modelConfig(setting: string, env: NodeJS.ProcessEnv = process.en
     const apiKey = env[`${P}_API_KEY`];
     const model = env[`${P}_MODEL`];
     if (!apiKey || !model) throw new Error(`ASSISTANT_ENGINE=${engine} needs ${P}_API_KEY and ${P}_MODEL.`);
-    let extraBody: Record<string, unknown> | undefined;
-    if (engine === "openai" && env.OPENAI_EXTRA_BODY) {
+    let extraBody: Record<string, unknown> | undefined = engine === "anthropic" ? DEFAULT_ANTHROPIC_EXTRA : undefined;
+    const extra = env[`${P}_EXTRA_BODY`];
+    if (extra) {
       try {
-        extraBody = JSON.parse(env.OPENAI_EXTRA_BODY);
+        extraBody = JSON.parse(extra);
       } catch {
-        throw new Error(`OPENAI_EXTRA_BODY should be a JSON object, e.g. {"enable_thinking":false}.`);
+        throw new Error(`${P}_EXTRA_BODY should be a JSON object, e.g. ${engine === "openai" ? `{"enable_thinking":false}` : `{"thinking":{"type":"disabled"}}`}.`);
       }
     }
     const baseUrl = env[`${P}_BASE_URL`] ?? (engine === "openai" ? "https://api.openai.com/v1" : "https://api.anthropic.com");
@@ -81,11 +91,14 @@ let bedrockConverse: ConverseFn | undefined;
 
 export async function modelConverse(cfg: ModelConfig): Promise<ConverseFn> {
   if (cfg.engine === "openai") return openaiConverse({ baseUrl: cfg.baseUrl!, apiKey: cfg.apiKey!, extraBody: cfg.extraBody });
-  if (cfg.engine === "anthropic") return anthropicConverse({ baseUrl: cfg.baseUrl!, apiKey: cfg.apiKey! });
+  if (cfg.engine === "anthropic") return anthropicConverse({ baseUrl: cfg.baseUrl!, apiKey: cfg.apiKey!, extraBody: cfg.extraBody });
   if (!bedrockConverse) {
     const { BedrockRuntimeClient, ConverseCommand } = await import("@aws-sdk/client-bedrock-runtime");
     const client = new BedrockRuntimeClient({});
-    bedrockConverse = (input) => client.send(new ConverseCommand(input as never)) as never;
+    // Anthropic reasoning blocks in a stored conversation mean nothing to Converse.
+    const converse = (input: ConverseInput) =>
+      ({ ...input, messages: input.messages.map((m) => ({ ...m, content: m.content.filter((c) => !("reasoning" in c)) })) });
+    bedrockConverse = (input) => client.send(new ConverseCommand(converse(input) as never)) as never;
   }
   return bedrockConverse;
 }
@@ -164,17 +177,16 @@ interface AnthropicResponse {
   content?: ({ type: "text"; text: string } | { type: "tool_use"; id: string; name: string; input: unknown } | { type: string })[];
 }
 
-export function anthropicConverse(opts: { baseUrl: string; apiKey: string }): ConverseFn {
+export function anthropicConverse(opts: { baseUrl: string; apiKey: string; extraBody?: Record<string, unknown> }): ConverseFn {
   return async (input) => {
+    // No temperature: current Claude models reject non-default sampling values.
     const body = {
       model: input.modelId,
       system: systemText(input),
       messages: input.messages.map(toAnthropic),
       tools: input.toolConfig.tools.map(({ toolSpec: t }) => ({ name: t.name, description: t.description, input_schema: t.inputSchema.json })),
       max_tokens: input.inferenceConfig.maxTokens,
-      temperature: input.inferenceConfig.temperature,
-      // A spoken reply can't wait for extended thinking: it roughly triples the latency of each call.
-      thinking: { type: "disabled" },
+      ...(opts.extraBody ?? DEFAULT_ANTHROPIC_EXTRA),
     };
     const res = (await postJson(
       `${trimSlash(opts.baseUrl)}/v1/messages`,
@@ -186,7 +198,8 @@ export function anthropicConverse(opts: { baseUrl: string; apiKey: string }): Co
     for (const b of res.content ?? []) {
       if (b.type === "text" && "text" in b && b.text.trim()) content.push({ text: b.text });
       else if (b.type === "tool_use" && "id" in b) content.push({ toolUse: { toolUseId: b.id, name: b.name, input: b.input } });
-      // Thinking blocks are never spoken.
+      // Thinking blocks are never spoken, but go back unchanged on the next request.
+      else if (b.type === "thinking" || b.type === "redacted_thinking") content.push({ reasoning: b });
     }
     return { stopReason: content.some((c) => "toolUse" in c) ? "tool_use" : "end_turn", output: { message: { role: "assistant", content } } };
   };
@@ -197,6 +210,7 @@ function toAnthropic(m: Message): unknown {
     role: m.role,
     content: m.content.flatMap((c): Record<string, unknown>[] => {
       if ("text" in c) return c.text.trim() ? [{ type: "text", text: c.text }] : [];
+      if ("reasoning" in c) return [c.reasoning as Record<string, unknown>];
       if ("toolUse" in c) return [{ type: "tool_use", id: c.toolUse.toolUseId, name: c.toolUse.name, input: c.toolUse.input ?? {} }];
       return [{ type: "tool_result", tool_use_id: c.toolResult.toolUseId, content: resultText(c), ...(c.toolResult.status === "error" ? { is_error: true } : {}) }];
     }),

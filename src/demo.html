@@ -27,11 +27,11 @@
     var m = location.hash.match(/key=([^&]+)/);
     if (m) { try { localStorage.setItem("petcheck.key", decodeURIComponent(m[1])); } catch (e) {} history.replaceState(null, "", location.pathname + location.search); }
     // Demo clock: /demo?time=17:40 runs both sides as if it's 5:40 PM today.
-    var t = new URLSearchParams(location.search).get("time");
-    if (t && /^([01]?\d|2[0-3]):[0-5]\d$/.test(t)) {
-      document.getElementById("left").src = "/alexa?compact=1&time=" + t;
-      document.getElementById("right").src = "/?time=" + t;
-    }
+    // Video mode: /demo?video=1 shows the model generically (see alexa.html).
+    var q = new URLSearchParams(location.search), t = q.get("time");
+    var clock = t && /^([01]?\d|2[0-3]):[0-5]\d$/.test(t) ? "&time=" + t : "";
+    document.getElementById("left").src = "/alexa?compact=1" + clock + (q.get("video") === "1" ? "&video=1" : "");
+    if (clock) document.getElementById("right").src = "/?" + clock.slice(1);
   </script>
 </body>
 </html>

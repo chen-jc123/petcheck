@@ -1,6 +1,6 @@
 // Small JSON API next to /mcp, shared by the local server and Lambda:
 //
-//   GET  /api/today[?time=HH:MM]          everything the household page shows for today
+//   GET  /api/today[?time=HH:MM]          everything the household page shows for today, incl. its care requests
 //   POST /api/check-missed {time?: HH:MM} run the missed-task check now (demo / manual)
 //   POST /api/assistant {text, speaker, history, time?}  simulated Alexa+ turn (Bedrock + MCP client)
 //   POST /api/log {pet, activity, by, confirm?, time?}  quick-log from the household page (same
@@ -17,6 +17,7 @@ import { storage } from "./mcp.js";
 import { notifyOwner } from "./notify.js";
 import { ACTIVITIES, PetCheckError, checkMissedTasks, logCare, todayView, type Activity, type Alert } from "./store.js";
 import { runAssistant, type AssistantRequest } from "./assistant.js";
+import { householdRequests } from "./market.js";
 
 export interface ApiResult {
   status: number;
@@ -79,7 +80,7 @@ export async function handleApi(
   try {
     const p = path.replace(/\/+$/, "");
     if (method === "GET" && p === "/today") {
-      const view = await storage.run(atTime(query.time, () => todayView()));
+      const view = await storage.run(atTime(query.time, () => ({ ...todayView(), careRequests: householdRequests() })));
       return { status: 200, body: view };
     }
     if (method === "POST" && p === "/check-missed") {

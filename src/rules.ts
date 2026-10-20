@@ -135,6 +135,11 @@ export function parseIntent(
     };
   }
 
+  // The care network needs the language model to fill in a request or weigh jobs.
+  if (/\b(sitters?|pet ?sit\w*|someone to (walk|feed|watch|look after|check on)|care requests?|bookings?)\b|\b(find|any|get)\b.*\b(jobs?|gigs?)\b/.test(t)) {
+    return { kind: "say", text: "Posting and finding care requests needs the AI assistant, which isn't available right now. Please try again in a few minutes." };
+  }
+
   // Safety: PetCheck never gives veterinary advice.
   if (/\b(can (dogs?|cats?|he|she|it|they) (eat|have)|is it (safe|ok|okay)|should i (give|feed)|how much \w+ should|what dose|dosage|is (this|that) (normal|serious))\b/.test(t)) {
     return { kind: "say", text: "I can't give veterinary advice. Please check with your vet. I can note what you've noticed if you'd like." };
@@ -184,6 +189,9 @@ export function parseIntent(
   };
 }
 
+/** "Emma: I fed Mochi" → "I fed Mochi" (the assistant puts the speaker's name in front of each line). */
+const withoutName = (s: string) => s.replace(/^[^:\n]{1,40}:\s+/, "");
+
 const lastText = (m: Message | undefined) =>
   m?.content.map((c) => ("text" in c ? c.text : "")).join(" ").trim() ?? "";
 
@@ -207,16 +215,19 @@ const useTool = ({ name, input }: ToolCall) => ({
 export const rulesConverse: ConverseFn = async (input: ConverseInput) => {
   const msgs = input.messages;
   // This turn's utterance is the last user message with text; tool results come after it.
-  const lastOf = (list: Message[], role: Message["role"]) => [...list].reverse().find((m) => m.role === role);
-  const utterance = [...msgs].reverse().find((m) => m.role === "user" && m.content.some((c) => "text" in c));
+  // Only messages with text count: stored sessions also hold tool calls and their results.
+  const lastSaid = (list: Message[], role: Message["role"]) =>
+    [...list].reverse().find((m) => m.role === role && m.content.some((c) => "text" in c));
+  const utterance = lastSaid(msgs, "user");
   const at = utterance ? msgs.lastIndexOf(utterance) : msgs.length;
-  const previousReply = lastText(lastOf(msgs.slice(0, at), "assistant"));
-  const previousUser = lastText(lastOf(msgs.slice(0, Math.max(at - 1, 0)), "user"));
+  const reply = lastSaid(msgs.slice(0, at), "assistant");
+  const previousReply = lastText(reply);
+  const previousUser = withoutName(lastText(lastSaid(msgs.slice(0, reply ? msgs.lastIndexOf(reply) : 0), "user")));
 
   const sys = input.system[0]?.text ?? "";
-  const speaker = sys.match(/The person speaking right now is ([^.\n]+)\./)?.[1] ?? "Someone";
+  const speaker = sys.match(/The person speaking right now is ([^.,\n]+)[.,]/)?.[1] ?? "Someone";
   const today = sys.match(/Today's date is (\d{4}-\d{2}-\d{2})/)?.[1] ?? new Date().toISOString().slice(0, 10);
-  const intent = parseIntent(lastText(utterance), { speaker, today, previousReply, previousUser });
+  const intent = parseIntent(withoutName(lastText(utterance)), { speaker, today, previousReply, previousUser });
 
   const results = msgs
     .slice(at + 1)

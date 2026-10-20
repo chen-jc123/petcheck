@@ -13,6 +13,7 @@ import { authenticate, handleOAuth, mcpAccessError } from "./oauth.js";
 import { CORS_HEADERS, handleApi, runMissedCheck } from "./api.js";
 import { page } from "./page.js";
 import { isDemoTime, withDemoTime } from "./clock.js";
+import { parseLocation, withDeviceLocation } from "./location.js";
 
 interface FunctionUrlEvent {
   rawPath: string;
@@ -118,7 +119,11 @@ async function handleHttp(event: FunctionUrlEvent): Promise<LambdaResult> {
     await server.connect(transport);
     // Demo clock from the simulated Alexa+ (only for authenticated callers; ignored if malformed).
     const demo = headers["x-petcheck-demo-time"];
-    const response = await withDemoTime(isDemoTime(demo) ? demo : undefined, () => transport.handleRequest(request, { parsedBody }));
+    // Device location from the (simulated) Alexa device, for the care network.
+    const place = parseLocation(headers["x-petcheck-location"], headers["x-petcheck-location-label"]);
+    const response = await withDemoTime(isDemoTime(demo) ? demo : undefined, () =>
+      withDeviceLocation(place, () => transport.handleRequest(request, { parsedBody })),
+    );
     return {
       statusCode: response.status,
       headers: Object.fromEntries(response.headers.entries()),

@@ -17,12 +17,12 @@
 |---|---|---|
 | 自托管 MCP server，spec ≥ 2025-11-25，Streamable HTTP | ✅ | 协商结果为 `2025-11-25`；`npm run check:mcp`（官方 MCP Inspector CLI 2.9.0）全部通过 |
 | 仓库在运行时真实调用赛道技术（不能只在 README 提及） | ✅ | `src/mcp.ts` `McpServer`、`src/lambda.ts` 传输层入口、`src/assistant.ts` MCP Client 每轮都经 HTTP 调用 `/mcp` |
-| 模拟 Alexa+ 的源码在仓库中，视频清楚展示其运行 | 代码 ✅ / 视频待录 | `src/alexa.html`、`src/assistant.ts`、`src/models.ts`；分镜见 video-script.md |
+| 模拟 Alexa+ 的源码在仓库中，视频清楚展示其运行 | ✅ | `src/alexa.html`、`src/assistant.ts`、`src/models.ts`；视频由 `scripts/video/` 用真实应用录制 |
 | 仓库含全部源码、素材、清晰的安装运行说明 | ✅ | 干净目录按 README 复现：`npm install` → `npm test` → `npm run build` → `npm run demo` 全部成功 |
 | 公开仓库带开源许可证，且在 About 区可见 | ✅（需确认） | MIT `LICENSE`；GitHub API 识别为 MIT。提交前在仓库页面确认 About 区显示 |
 | 文字描述说明功能 | 草稿 ✅ | description.md |
-| 视频 < 3 分钟，YouTube/Vimeo 公开，英文 | 待重录 | 现有 "PetCheck ad" 录于规则引擎时期，和现在的行为不一致；旁白已更新，估算约 2 分 12 秒 |
-| 视频不含第三方商标、无授权音乐 | 待注意 | 旁白已避免点名模型厂商；页面上的引擎标签会显示模型名，属于技术标注，不要加厂商 logo |
+| 视频 < 3 分钟，YouTube/Vimeo 公开，英文 | 已生成，待上传 | `scripts/video/make-video.mjs` 用 AI 生成：AI 旁白（逐段转写校验）+ Playwright 录制真实应用 + ffmpeg 剪辑；上传需学生的 YouTube 账号 |
+| 视频不含第三方商标、无授权音乐 | ✅ | 录制用 `?video=1`，引擎显示为 "AI model"，页脚和幻灯片不出现厂商名；无音乐；结尾卡片注明配音为 AI 生成、数据为样例 |
 | 每个工具/API/SDK 的产品反馈（5 个问题） | 草稿 ✅ | product-feedback.md，"Again?" 等主观项由学生确认 |
 | 声明赛道 Alexa+、小挑战 AWS Builder | 待填表 | AWS 服务说明写在产品反馈里（规则要求） |
 | 评委可测试至评审期结束；私有站点需提供凭据 | 待部署 | 用户已决定先只做本地开发；正式提交前需部署，并在 testing-instructions.md 填入 URL 和 key |
@@ -35,7 +35,10 @@
 
 | 场景 | 结果 | 证据 |
 |---|---|---|
-| 8 个 Agent 场景（真实模型） | ✅ | `npm run test:live`：OpenAI 协议、Anthropic 协议均 8/8 |
+| 12 个 Agent 场景（真实模型） | ✅ | `npm run test:live`（固定演示时钟、服务端会话）：Claude Opus 5.5、Claude Haiku 5.5、GPT-4.1 mini（中转站）和 Qwen 3.8 Max（阿里云）均 12/12 |
+| 多轮对话（服务端会话） | ✅ | 跟进追问、跨轮代词、同一设备上 Dad 和 Emma 交替说话的重复确认；`test:assistant` 验证第 2 轮能看到第 1 轮的工具调用和结果 |
+| 数据存储 | ✅ | `STORAGE=file` 本地持久化（只追加的 JSONL，重启后读回），会话同样持久化；DynamoDB 增加照护网络分区和会话（IAM 已加 GetItem）；`test:storage` 覆盖跨容器和文件存储 |
+| 照护网络（发布需求 / 智能接单） | ✅ | 发布：AI 整理成固定表单、自动定位、读回确认后发布；接单：按距离、服务、宠物种类、日期、报酬筛选并排除时间冲突，先到先得；`test:market`（草稿、拒绝规则、自动定位、筛选、冲突、接单、通知）+ 真实模型场景 |
 | 实际语音输入 | 部分 ✅ | 浏览器端用模拟识别器跑通：识别结果 → 真实模型 → MCP → 家庭页面一致（含 "Machi" 识别错误的纠正）。真人麦克风仍需学生在 Chrome/Safari 实测一次 |
 | 自动提醒（无需点按钮） | ✅（本地） | 本地服务内置每 5 分钟检查（`CHECK_EVERY_MIN`）；`test:alerts` 验证定时运行、去重、补记后显示已解决 |
 | 主人邮件 | 逻辑 ✅ / 真实发送待部署 | `test:alerts` 验证哪些提醒会发邮件、主题和内容；SNS 实发需部署后看收件箱 |
@@ -47,6 +50,6 @@
 
 1. 读懂 10-20 的全部改动（见这次 PR 的说明），能讲清模型协议适配层和 MCP 的分工。规则要求作品是参赛者自己的成果，可以接受技术协助，但思路和成果要归参赛者。
 2. 部署：在 `.env.deploy` 里加入模型配置，执行 `npm run deploy`，然后运行 `API_KEY=<key> npm run check:mcp -- <URL>/mcp`。
-3. 重新生成旁白（`npm run narration:polly`），按 video-script.md 录制并上传视频。
+3. 完整看一遍 `scripts/video/out/petcheck-demo.mp4`（不入库，在教师电脑上），确认没问题后用自己的账号上传到 YouTube（公开）。也可以按 video-script.md 自己重新生成。
 4. 通读 description.md 和 product-feedback.md，改成自己的话；补上 "What we learned" 和 DynamoDB 的反馈。
 5. 填写 Devpost 表单，并保存提交成功的截图。
