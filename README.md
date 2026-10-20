@@ -255,7 +255,8 @@ npm run deploy      # Lambda + Function URL + 5-min schedule + OAuth secrets (+ 
 the URLs and runs a smoke test (health, `tools/list`, an OAuth client-credentials token, a missed-task
 check). Secrets (API key, OAuth client secret and signing key) are generated once into `.env.deploy`,
 which is git-ignored. Add `ALERT_EMAIL=you@example.com` there for owner emails, and the model settings
-from `.env.example` (`ASSISTANT_ENGINE`, `OPENAI_*` or `ANTHROPIC_*`) to choose the simulated Alexa+'s model.
+from `.env.example` (`ASSISTANT_ENGINE`, `OPENAI_*` or `ANTHROPIC_*`, `MODEL_TIMEOUT_MS`) to choose the simulated
+Alexa+'s model. The function's timeout is 60 s (`LAMBDA_TIMEOUT`), since a turn through a slow relay can take 20 s or more.
 
 | Path | What |
 |---|---|

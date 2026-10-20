@@ -35,7 +35,7 @@ const LABELS: Record<ModelEngine, string> = {
   anthropic: "Anthropic-compatible API",
 };
 
-/** One model call; a turn makes 2 or 3 of them, and Lambda gives the whole request 30 s. */
+/** One model call; a turn makes 2 or 3 of them, and the deployed Lambda allows 60 s (LAMBDA_TIMEOUT). */
 const TIMEOUT_MS = Number(process.env.MODEL_TIMEOUT_MS ?? 12_000);
 
 /**

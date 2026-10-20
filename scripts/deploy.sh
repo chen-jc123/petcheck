@@ -18,6 +18,8 @@ TABLE="${TABLE_NAME:-petcheck}"
 REGION="${AWS_REGION:-$(aws configure get region 2>/dev/null || true)}"
 REGION="${REGION:-us-east-1}"
 HOUSEHOLD_TZ="${HOUSEHOLD_TZ:-America/Detroit}"
+# A spoken turn can make 2–3 model calls; through a slow relay that takes longer than 30 s.
+# Function URLs allow up to 900 s. Set LAMBDA_TIMEOUT in .env.deploy to change it.
 # Simulated Alexa+ model: set ASSISTANT_ENGINE and the OPENAI_* / ANTHROPIC_* settings in
 # .env.deploy (same names as .env.example), or override the Bedrock model, e.g.
 #   BEDROCK_MODEL_ID=us.amazon.nova-pro-v1:0
@@ -29,6 +31,7 @@ echo "Deploying $FN to account $ACCOUNT in $REGION"
 # API key: generated once, kept in .env.deploy (git-ignored). Never commit it.
 if [ -f .env.deploy ]; then source .env.deploy; fi
 BEDROCK_MODEL_ID="${BEDROCK_MODEL_ID:-us.amazon.nova-lite-v1:0}"
+LAMBDA_TIMEOUT="${LAMBDA_TIMEOUT:-60}"
 if [ -z "${API_KEY:-}" ]; then
   API_KEY=$(openssl rand -hex 24)
   echo "API_KEY=$API_KEY" >> .env.deploy
@@ -116,7 +119,7 @@ if aws lambda get-function --function-name "$FN" >/dev/null 2>&1; then
   aws lambda update-function-code --function-name "$FN" --zip-file fileb://dist/petcheck-lambda.zip >/dev/null
   aws lambda wait function-updated-v2 --function-name "$FN"
   aws lambda update-function-configuration --function-name "$FN" \
-    --environment "$ENV_JSON" --timeout 30 --memory-size 512 >/dev/null
+    --environment "$ENV_JSON" --timeout "$LAMBDA_TIMEOUT" --memory-size 512 >/dev/null
   aws lambda wait function-updated-v2 --function-name "$FN"
   echo "   updated $FN"
 else
@@ -125,7 +128,7 @@ else
         --runtime nodejs22.x --architectures arm64 \
         --handler lambda.handler --role "$ROLE_ARN" \
         --zip-file fileb://dist/petcheck-lambda.zip \
-        --timeout 30 --memory-size 512 \
+        --timeout "$LAMBDA_TIMEOUT" --memory-size 512 \
         --environment "$ENV_JSON" \
         --tags project=petcheck >/dev/null 2>/tmp/petcheck-create.err; then
       break
