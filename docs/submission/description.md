@@ -55,10 +55,11 @@ hands are full with a food bowl, a leash or a pill pocket. Saying it out loud is
   is a real MCP client that calls the same server over HTTP; the page shows every MCP request.
 - **The model:** a tool-calling language model decides which PetCheck tools to call. The adapter speaks the
   OpenAI Chat Completions, Anthropic Messages and Amazon Bedrock Converse protocols, against any compatible
-  endpoint. Our AWS account is still waiting for Bedrock access, so during development we used a relay
-  (ZenMux) and Alibaba Cloud Model Studio; the demo video runs Claude Opus 5.5 through the relay's
-  Anthropic-compatible endpoint. Claude Opus 5.5, Claude Haiku 5.5, GPT-4.1 mini and Qwen 3.8 Max all pass our
-  acceptance suite. If the model can't be reached, a built-in rules engine answers through the same MCP
+  endpoint. Our AWS account is still waiting for Bedrock access, so during development we used relays
+  and Alibaba Cloud Model Studio; the demo video runs Claude Opus 5.5 through a relay's
+  Anthropic-compatible endpoint. Claude Opus 5.5, Opus 5, Sonnet 5, Haiku 5.5 and Haiku 4.5, GPT-4.1 mini and
+  Qwen 3.8 Max all pass our acceptance suite. A confirmation (a duplicate feeding, a care request draft) has
+  to come from the person's next line: the assistant won't let a model confirm its own question. If the model can't be reached, a built-in rules engine answers through the same MCP
   tools, and the page labels which engine replied (the video shows it generically as "AI model").
 - **Storage:** records are only ever added, never updated, in memory, an append-only file locally, or
   DynamoDB, so devices can't overwrite each other. The care network lives in a partition shared by every

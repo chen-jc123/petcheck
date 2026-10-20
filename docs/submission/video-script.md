@@ -16,10 +16,14 @@ npm run demo:video
 # terminal 2
 cd scripts/video
 npm run setup                                    # once: Playwright + Chromium
-TTS_BASE_URL=https://zenmux.ai/api/v1 TTS_API_KEY=… VERIFY_MODEL=google/gemini-3.5-flash npm run make
+TTS_BASE_URL=<endpoint with /audio/speech> TTS_API_KEY=… npm run make
 ```
 
-Without `TTS_BASE_URL` it falls back to macOS `say`. Output: `scripts/video/out/petcheck-demo.mp4`
+`TTS_BASE_URL` is any OpenAI-compatible endpoint with `/audio/speech` (`TTS_MODEL`, `NARRATOR_VOICE`,
+`ALEXA_VOICE` pick the voices). Without it, the script falls back to macOS `say`. `VERIFY_MODEL` (a chat model
+on the same endpoint that accepts audio) transcribes each clip back and remakes it if words are missing. The
+current cut was voiced by Gemini 3.8 Flash TTS (voices Charon and Kore) through a relay. Use `--edit` to
+re-cut the last recording without recording again. Output: `scripts/video/out/petcheck-demo.mp4`
 (1920×1080, 30 fps, AAC, loudness-normalized), plus `out/frames.png`, one frame from every scene for a quick
 check. Restart `npm run demo:video` before each run so the household starts fresh.
 

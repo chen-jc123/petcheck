@@ -89,6 +89,16 @@ try {
   assert.ok(r.toolCalls[0].isError);
   console.log("✔ OpenAI-compatible: failed tool reaches the model as “Error: …”");
 
+  // Reasoning models (GPT-5 and later) reject max_tokens and temperature: null removes a field.
+  process.env.OPENAI_EXTRA_BODY = '{"max_tokens":null,"temperature":null,"max_completion_tokens":400,"reasoning_effort":"low"}';
+  script = openaiScript("get_status", {});
+  seen.length = 0;
+  await runAssistant({ text: "What's left today?", speaker: "Dad" }, { mcpUrl, apiKey: "test" });
+  assert.ok(!("max_tokens" in seen[0].body) && !("temperature" in seen[0].body), "removed");
+  assert.equal(seen[0].body.max_completion_tokens, 400);
+  process.env.OPENAI_EXTRA_BODY = '{"enable_thinking":false}';
+  console.log("✔ OPENAI_EXTRA_BODY: null removes max_tokens and temperature for reasoning models");
+
   // 2. Anthropic-compatible Messages.
   Object.assign(process.env, {
     ASSISTANT_ENGINE: "anthropic",

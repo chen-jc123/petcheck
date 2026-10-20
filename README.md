@@ -71,9 +71,9 @@ type there. All times are shown in the household's time zone (`HOUSEHOLD_TZ`, de
 
 **With a real language model:** copy [`.env.example`](.env.example) to `.env`, fill in an API key for any
 OpenAI-compatible or Anthropic-compatible endpoint (a relay works too), then `npm run demo:ai`. The startup
-line and the engine badge on the page show which model is answering. We develop against a relay (ZenMux:
-Claude Opus 5.5 and Haiku 5.5, GPT-4.1 mini) and Alibaba Cloud Model Studio (Qwen); Amazon Bedrock works
-the same way once an account has model access. `STORAGE=file` keeps local data and conversations in `.data/`
+line and the engine badge on the page show which model is answering. We develop against relays (中转站)
+and Alibaba Cloud Model Studio; `.env.example` shows a Code CLI setup (Claude through its Anthropic-compatible
+endpoint). Amazon Bedrock works the same way once an account has model access. `STORAGE=file` keeps local data and conversations in `.data/`
 across restarts.
 
 ## How it works
@@ -122,8 +122,11 @@ across restarts.
   time (natural phrasing, log-and-ask in one sentence, follow-ups, a pronoun from the previous turn, "I fed
   him" with no pet named, duplicate confirm and cancel, an unknown pet, a dose question, a vet visit, posting
   a care request, a sitter finding and taking a job then logging a visit, and asking who took it), and checks
-  the tool calls and the stored records, not just the wording. Claude Opus 5.5, Claude Haiku 5.5 and GPT-4.1
-  mini pass all 12.
+  the tool calls and the stored records, not just the wording. Claude Opus 5.5, Opus 5, Sonnet 5, Haiku 5.5
+  and Haiku 4.5, GPT-4.1 mini and Qwen 3.8 Max pass all 12 (2.5–8 s a turn, depending on model and relay).
+- **Confirmations come from people.** If a tool asks for confirmation (a duplicate feeding, a care request
+  draft), the assistant won't let the model confirm it in the same turn; the yes has to be in the person's
+  next line. One model posted a draft and confirmed it in one go during testing; this stops that.
 
 ### Where the track technology runs (for reviewers)
 

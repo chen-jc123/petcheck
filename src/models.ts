@@ -4,7 +4,8 @@
 // it makes) is the same whichever model answers.
 //
 //   ASSISTANT_ENGINE=openai     any OpenAI-compatible Chat Completions API
-//                               OPENAI_BASE_URL, OPENAI_API_KEY, OPENAI_MODEL, optional OPENAI_EXTRA_BODY (JSON)
+//                               OPENAI_BASE_URL, OPENAI_API_KEY, OPENAI_MODEL, optional OPENAI_EXTRA_BODY (JSON;
+//                               a null value removes that field, e.g. {"max_tokens":null} for reasoning models)
 //   ASSISTANT_ENGINE=anthropic  any Anthropic-compatible Messages API
 //                               ANTHROPIC_BASE_URL, ANTHROPIC_API_KEY, ANTHROPIC_MODEL, optional ANTHROPIC_EXTRA_BODY (JSON)
 //
@@ -226,13 +227,15 @@ const systemText = (input: ConverseInput) => input.system.map((s) => s.text).joi
 const textOf = (m: Message) => m.content.flatMap((c) => ("text" in c && c.text.trim() ? [c.text] : [])).join("\n");
 const resultText = (c: Extract<ContentBlock, { toolResult: unknown }>) => c.toolResult.content.map((x) => x.text).join("\n");
 
-async function postJson(url: string, headers: Record<string, string>, body: unknown, label: string): Promise<unknown> {
+async function postJson(url: string, headers: Record<string, string>, body: Record<string, unknown>, label: string): Promise<unknown> {
+  // A null from *_EXTRA_BODY removes a default field (reasoning models reject max_tokens and temperature).
+  const sent = Object.fromEntries(Object.entries(body).filter(([, v]) => v !== null));
   let res: Response;
   try {
     res = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json", ...headers },
-      body: JSON.stringify(body),
+      body: JSON.stringify(sent),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (err) {

@@ -35,7 +35,7 @@
 
 | 场景 | 结果 | 证据 |
 |---|---|---|
-| 12 个 Agent 场景（真实模型） | ✅ | `npm run test:live`（固定演示时钟、服务端会话）：Claude Opus 5.5、Claude Haiku 5.5、GPT-4.1 mini（中转站）和 Qwen 3.8 Max（阿里云）均 12/12 |
+| 12 个 Agent 场景（真实模型） | ✅ | `npm run test:live`（固定演示时钟、服务端会话）：Code CLI 中转站上 Claude Opus 5、Sonnet 5、Haiku 4.5 均 12/12（每轮 5–8 秒）；另测过 Claude Opus 5.5、Haiku 5.5、GPT-4.1 mini 和阿里云 Qwen 3.8 Max，也都 12/12。Code CLI 的 OpenAI 协议只有推理型 GPT，每轮约 29 秒，不适合语音 |
 | 多轮对话（服务端会话） | ✅ | 跟进追问、跨轮代词、同一设备上 Dad 和 Emma 交替说话的重复确认；`test:assistant` 验证第 2 轮能看到第 1 轮的工具调用和结果 |
 | 数据存储 | ✅ | `STORAGE=file` 本地持久化（只追加的 JSONL，重启后读回），会话同样持久化；DynamoDB 增加照护网络分区和会话（IAM 已加 GetItem）；`test:storage` 覆盖跨容器和文件存储 |
 | 照护网络（发布需求 / 智能接单） | ✅ | 发布：AI 整理成固定表单、自动定位、读回确认后发布；接单：按距离、服务、宠物种类、日期、报酬筛选并排除时间冲突，先到先得；`test:market`（草稿、拒绝规则、自动定位、筛选、冲突、接单、通知）+ 真实模型场景 |

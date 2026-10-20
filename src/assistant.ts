@@ -326,6 +326,8 @@ export async function runAssistant(
 
     // 3. Let the model call tools (via MCP) until it has an answer.
     const toolCalls: AssistantResponse["toolCalls"] = [];
+    /** Tools that asked for confirmation this turn. */
+    const awaitingAnswer = new Set<string>();
     let reply = "";
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
       const out = await converse({
@@ -348,7 +350,17 @@ export async function runAssistant(
       }
       const results: ContentBlock[] = [];
       for (const { toolUse } of uses) {
-        const r = await client.callTool({ name: toolUse.name, arguments: (toolUse.input ?? {}) as Record<string, unknown> });
+        const args = (toolUse.input ?? {}) as Record<string, unknown>;
+        // A confirmation has to come from the person: a tool that asked for one this turn can't be
+        // confirmed until they reply (some models post a draft and confirm it in the same breath).
+        if (args.confirm === true && awaitingAnswer.has(toolUse.name)) {
+          const resultText = "Not done: they haven't answered yet. Ask them, and confirm only after they say yes in their reply.";
+          toolCalls.push({ name: toolUse.name, input: toolUse.input, result: resultText, isError: true });
+          results.push({ toolResult: { toolUseId: toolUse.toolUseId, content: [{ text: resultText }], status: "error" } });
+          continue;
+        }
+        const r = await client.callTool({ name: toolUse.name, arguments: args });
+        if ((r.structuredContent as { status?: string } | undefined)?.status === "needs_confirmation") awaitingAnswer.add(toolUse.name);
         const resultText = ((r.content as { type: string; text?: string }[]) ?? [])
           .filter((c) => c.type === "text")
           .map((c) => c.text)

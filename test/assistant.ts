@@ -165,6 +165,25 @@ try {
   assert.match(r.reply, /^I found \d jobs?\. R-1031: dog walks for Luna, .*0\.5 miles away in Water Hill/);
   console.log("✔ sitter on a phone in Kerrytown →", r.reply.slice(0, 90) + "…");
 
+  // 11. A model that drafts a care request and confirms it in the same turn is stopped: the yes
+  //     has to come from the person (seen with a real model during acceptance runs).
+  const { householdRequests } = await import("../src/market.js");
+  const before = householdRequests().length;
+  const draft = { pets: ["Biscuit"], service: "walk", start_date: new Date(Date.now() + 4 * 86_400_000).toISOString().slice(0, 10), by: "Mom" };
+  const eager: ConverseFn = async (req) => {
+    const results = req.messages.filter((m) => m.content.some((c) => "toolResult" in c)).length;
+    const call = (input: object) => ({ stopReason: "tool_use", output: { message: { role: "assistant" as const, content: [{ toolUse: { toolUseId: `t${results}`, name: "post_care_request", input } }] } } });
+    if (results === 0) return call(draft); // the draft…
+    if (results === 1) return call({ ...draft, confirm: true }); // …confirmed without asking
+    return { stopReason: "end_turn", output: { message: { role: "assistant", content: [{ text: "Posted!" }] } } };
+  };
+  r = await runAssistant({ text: "Find someone to walk Biscuit", speaker: "Mom" }, { mcpUrl, apiKey: "test", converse: eager });
+  assert.equal(r.toolCalls.length, 2);
+  assert.ok(r.toolCalls[1].isError && /haven't answered yet/.test(r.toolCalls[1].result), r.toolCalls[1].result);
+  assert.equal(r.trace.filter((t) => t.tool === "post_care_request").length, 1, "the confirming call never reached the server");
+  assert.equal(householdRequests().length, before, "nothing was posted");
+  console.log("✔ draft confirmed by the model itself in the same turn → blocked, nothing posted");
+
   console.log("\nAll assistant checks passed.");
 } finally {
   server.close();
