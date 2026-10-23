@@ -3,6 +3,7 @@
 // touching the tool definitions.
 
 import {
+  HOUSEHOLD_TZ,
   now,
   localParts,
   hhmmToMinutes,
@@ -13,6 +14,7 @@ import {
   localToDate,
   spokenDate,
 } from "./clock.js";
+import type { CareRequest, Claim } from "./market.js";
 
 export const ACTIVITIES = ["feed", "walk", "meds", "litter", "water", "groom", "other"] as const;
 export type Activity = (typeof ACTIVITIES)[number];
@@ -68,6 +70,8 @@ export const ESCALATE_AFTER_MIN = 60;
  * has already alerted about them; this also avoids an alert flood after downtime.
  */
 export const MAX_ALERT_AGE_MIN = 180;
+/** Vet visits are announced the day before, from this time (household local). */
+export const VET_REMINDER_TIME = "09:00";
 
 export type AlertLevel = "household" | "owner";
 
@@ -76,19 +80,19 @@ export interface Alert {
   petId: string;
   pet: string;
   level: AlertLevel;
-  date: string; // household-local date of the missed task
-  slot: string; // e.g. "dinner@18:00" — identifies the routine task
+  date: string; // household-local date of the missed task (or of the vet reminder)
+  slot: string; // e.g. "dinner@18:00" — identifies the routine task; "vet@<visit id>" / "request@<request id>" otherwise
   label: string;
-  time: string; // HH:MM the task was due
+  time: string; // HH:MM the task was due (the visit time for a vet reminder, if known)
   at: string; // UTC ISO when the alert was raised
   message: string;
 }
 
 let seq = 0;
-const newId = (prefix: string) => `${prefix}_${Date.now().toString(36)}_${(seq++).toString(36)}`;
+export const newId = (prefix: string) => `${prefix}_${Date.now().toString(36)}_${(seq++).toString(36)}`;
 
 // ---------------------------------------------------------------------------
-// In-memory data (replaced by DynamoDB in the next milestone)
+// In-memory data, loaded from and saved to the storage mode (see storage.ts)
 // ---------------------------------------------------------------------------
 
 const db = {
@@ -97,27 +101,38 @@ const db = {
   notes: [] as Note[],
   visits: [] as VetVisit[],
   alerts: [] as Alert[],
+  // The care network (market.ts): requests from every household, and sitters' claims on them.
+  requests: [] as CareRequest[],
+  claims: [] as Claim[],
 };
 
-export type Kind = "pet" | "event" | "note" | "visit" | "alert";
-export type Change = { kind: Kind; item: Pet | CareEvent | Note | VetVisit | Alert };
+type Item = Pet | CareEvent | Note | VetVisit | Alert | CareRequest | Claim;
+export type Kind = "pet" | "event" | "note" | "visit" | "alert" | "request" | "claim";
+export type Change = { kind: Kind; item: Item };
 
 /** New records created since the last takeChanges() — what a persistent store must save. */
 let changes: Change[] = [];
 
-function insert(kind: "pet", item: Pet): void;
-function insert(kind: "event", item: CareEvent): void;
-function insert(kind: "note", item: Note): void;
-function insert(kind: "visit", item: VetVisit): void;
-function insert(kind: "alert", item: Alert): void;
-function insert(kind: Kind, item: Pet | CareEvent | Note | VetVisit | Alert): void {
+export function insert(kind: "pet", item: Pet): void;
+export function insert(kind: "event", item: CareEvent): void;
+export function insert(kind: "note", item: Note): void;
+export function insert(kind: "visit", item: VetVisit): void;
+export function insert(kind: "alert", item: Alert): void;
+export function insert(kind: "request", item: CareRequest): void;
+export function insert(kind: "claim", item: Claim): void;
+export function insert(kind: Kind, item: Item): void {
   if (kind === "pet") db.pets.push(item as Pet);
   else if (kind === "event") db.events.push(item as CareEvent);
   else if (kind === "note") db.notes.push(item as Note);
   else if (kind === "alert") db.alerts.push(item as Alert);
+  else if (kind === "request") db.requests.push(item as CareRequest);
+  else if (kind === "claim") db.claims.push(item as Claim);
   else db.visits.push(item as VetVisit);
   changes.push({ kind, item });
 }
+
+/** The care network's records (read by market.ts). */
+export const marketRecords = () => ({ requests: db.requests, claims: db.claims });
 
 /** Return and clear the list of records created since the last call. */
 export function takeChanges(): Change[] {
@@ -133,12 +148,16 @@ export function loadState(state: {
   notes: Note[];
   visits: VetVisit[];
   alerts?: Alert[];
+  requests?: CareRequest[];
+  claims?: Claim[];
 }): void {
   db.pets = [...state.pets];
   db.events = [...state.events];
   db.notes = [...state.notes];
   db.visits = [...state.visits];
   db.alerts = [...(state.alerts ?? [])];
+  db.requests = [...(state.requests ?? [])];
+  db.claims = [...(state.claims ?? [])];
   changes = [];
 }
 
@@ -149,6 +168,8 @@ export function resetStore(): void {
   db.notes = [];
   db.visits = [];
   db.alerts = [];
+  db.requests = [];
+  db.claims = [];
 }
 
 export function seedDemoData(): void {
@@ -272,7 +293,7 @@ export function findPet(name?: string): Pet {
 }
 
 /** "dad" -> "Dad", "mary jane" -> "Mary Jane"; empty -> "Someone". */
-function personName(raw?: string): string {
+export function personName(raw?: string): string {
   const t = raw?.trim();
   if (!t) return "Someone";
   return t.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
@@ -320,7 +341,7 @@ function editDistance(a: string, b: string): number {
   return row[b.length];
 }
 
-function joinNames(names: string[]): string {
+export function joinNames(names: string[]): string {
   if (names.length <= 1) return names.join("");
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
@@ -535,6 +556,8 @@ export function addVetVisit(input: { pet?: string; date: string; time?: string; 
   const pet = findPet(input.pet);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) throw new PetCheckError(`Date "${input.date}" should look like 2026-10-06.`);
   if (input.time && !/^\d{1,2}:\d{2}$/.test(input.time)) throw new PetCheckError(`Time "${input.time}" should look like 10:00.`);
+  const today = localParts(now()).date;
+  if (input.date < today) throw new PetCheckError(`${spokenDate(input.date)} has already passed. Which day is the visit?`);
   const visit: VetVisit = { id: newId("vet"), petId: pet.id, date: input.date, time: input.time, reason: input.reason };
   insert("visit", visit);
   return {
@@ -543,7 +566,8 @@ export function addVetVisit(input: { pet?: string; date: string; time?: string; 
       `Vet visit for ${pet.name} on ${spokenDate(input.date)}` +
       (input.time ? ` at ${minutesToSpoken(hhmmToMinutes(input.time))}` : "") +
       (input.reason ? ` for ${input.reason}` : "") +
-      `. I'll remind you the day before.`,
+      // The missed-task check announces it the day before (checkMissedTasks).
+      (input.date > today ? `. I'll remind the household the day before.` : "."),
   };
 }
 
@@ -670,11 +694,12 @@ export function _insertEvent(e: Omit<CareEvent, "id">): void {
  *   +60 min  → "owner" alert (also sent by email/SMS via SNS)
  * Each (task, level) alert is raised once, so running this every 5 minutes is safe.
  * Tasks more than MAX_ALERT_AGE_MIN late are ignored.
+ * Also announces tomorrow's vet visits once, from VET_REMINDER_TIME today.
  * Returns only the alerts created by this run.
  */
 export function checkMissedTasks(): Alert[] {
   const { date, minutes: nowMin } = localParts(now());
-  const raised: Alert[] = [];
+  const raised: Alert[] = [...remindVetVisits(date, nowMin)];
   for (const pet of db.pets) {
     for (const s of todaySlots(pet)) {
       if (s.state === "done") continue;
@@ -712,6 +737,41 @@ export function checkMissedTasks(): Alert[] {
   }
   return raised;
 }
+
+/** A household reminder for each vet visit tomorrow, raised once (slot "vet@<visit id>"). */
+function remindVetVisits(today: string, nowMin: number): Alert[] {
+  if (nowMin < hhmmToMinutes(VET_REMINDER_TIME)) return [];
+  const tomorrow = new Date(Date.parse(`${today}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+  const raised: Alert[] = [];
+  for (const v of db.visits) {
+    const pet = db.pets.find((p) => p.id === v.petId);
+    const slot = `vet@${v.id}`;
+    if (v.date !== tomorrow || !pet || db.alerts.some((a) => a.slot === slot)) continue;
+    const alert: Alert = {
+      id: newId("alert"),
+      petId: pet.id,
+      pet: pet.name,
+      level: "household",
+      date: today,
+      slot,
+      label: "vet visit",
+      time: v.time ?? "",
+      at: now().toISOString(),
+      message:
+        `Reminder: ${pet.name} has a vet visit tomorrow` +
+        (v.time ? ` at ${minutesToSpoken(hhmmToMinutes(v.time))}` : "") +
+        (v.reason ? ` for ${v.reason}` : "") +
+        ".",
+    };
+    insert("alert", alert);
+    raised.push(alert);
+  }
+  return raised;
+}
+
+export const isVetReminder = (a: Alert) => a.slot.startsWith("vet@");
+/** "Sam took your care request" (market.ts, slot "request@<request id>"). */
+export const isCareAlert = (a: Alert) => a.slot.startsWith("request@");
 
 function lateText(min: number): string {
   if (min < 90) return `${min} minutes`;
@@ -793,6 +853,7 @@ export function todayView() {
   return {
     date,
     nowMinutes,
+    tz: HOUSEHOLD_TZ, // so the page shows clock times in the household's zone, not the viewer's
     pets: db.pets.map((p) => ({ name: p.name, species: p.species, slots: todaySlots(p), week: petWeek(p) })),
     helpers: weekHelpers(),
     events,

@@ -9,7 +9,7 @@ process.env.OAUTH_SIGNING_KEY = "signing-key";
 const KEY = process.env.API_KEY;
 const { handler } = await import("../src/lambda.js");
 type HttpResult = { statusCode: number; headers?: Record<string, string>; body?: string };
-const http = async (e: ReturnType<typeof event>) => (await handler(e)) as HttpResult;
+const http = async (e: Parameters<typeof handler>[0]) => (await handler(e)) as HttpResult;
 
 const event = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}) => ({
   rawPath: path,
@@ -33,7 +33,7 @@ r = await http(event("POST", "/mcp", rpc(1, "tools/list")));
 assert.equal(r.statusCode, 401);
 console.log("✔ no key → 401");
 
-r = await handler(
+r = await http(
   event("POST", "/mcp", rpc(1, "initialize", {
     protocolVersion: "2025-11-25",
     capabilities: {},
@@ -46,7 +46,7 @@ console.log("✔ initialize:", JSON.parse(r.body!).result.serverInfo);
 r = await http(event("POST", "/mcp", rpc(2, "tools/list"), auth));
 assert.equal(r.statusCode, 200, r.body);
 const names = JSON.parse(r.body!).result.tools.map((t: { name: string }) => t.name);
-assert.equal(names.length, 6);
+assert.equal(names.length, 10);
 console.log("✔ tools/list:", names.join(", "));
 
 r = await http(event("POST", "/mcp", rpc(3, "tools/call", { name: "log_care", arguments: { pet: "Mochi", activity: "feed", by: "Dad" } }), auth));

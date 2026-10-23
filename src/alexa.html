@@ -23,7 +23,7 @@
   .logo { width: 26px; height: 26px; border-radius: 7px; flex: none; }
   header h1 { font-size: 18px; margin: 0; }
   .tagpill { font-size: 12px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
-  .tagpill.engine.bedrock { color: var(--ok); border-color: rgba(60,207,142,.4); }
+  .tagpill.engine.llm { color: var(--ok); border-color: rgba(60,207,142,.4); }
   .tagpill.engine.rules { color: var(--warn); border-color: rgba(240,178,74,.4); }
   header a { margin-left: auto; color: var(--muted); font-size: 13px; }
 
@@ -86,6 +86,9 @@
   .interim:empty { display: none; }
   .speakers { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   .speakers .lbl { color: var(--muted); font-size: 12px; margin-right: 2px; }
+  .speakers .sep { width: 1px; height: 18px; background: var(--line); margin: 0 4px; }
+  .where { color: var(--muted); font-size: 12px; }
+  .where .link { background: none; border: 0; padding: 0; color: var(--muted); text-decoration: underline; cursor: pointer; font: inherit; }
   .chip { border: 1px solid var(--line); background: var(--panel2); color: var(--ink); padding: 5px 11px; border-radius: 999px; cursor: pointer; font: inherit; font-size: 14px; }
   .chip.on { border-color: var(--accent); background: rgba(46,196,243,.15); color: #fff; }
   .say-row { display: flex; gap: 8px; align-items: center; }
@@ -177,6 +180,7 @@
             <div class="status" id="status">Tap the mic and speak, or type below.</div>
             <div class="interim" id="interim"></div>
             <div class="speakers" id="speakers" role="radiogroup" aria-label="Who's speaking"></div>
+            <div class="where"><span id="where-text"></span> <button class="link" id="use-gps" type="button">Use this device's location</button></div>
             <div class="say-row">
               <button class="mic" id="mic" title="Talk (or press Space)" aria-label="Talk">🎙️</button>
               <form class="say" id="say">
@@ -211,7 +215,7 @@
         </div>
       </div>
     </div>
-    <footer>Voice in and out runs in your browser. The assistant uses Amazon Bedrock (with a rules fallback) and reaches PetCheck only through its MCP server.</footer>
+    <footer>Voice in and out runs in your browser. The assistant is a tool-calling language model (OpenAI- or Anthropic-compatible API, or Amazon Bedrock, with a rules fallback) and reaches PetCheck only through its MCP server.</footer>
   </section>
 </main>
 
@@ -219,16 +223,39 @@
 (function () {
   "use strict";
   var KEY_STORE = "petcheck.key", SPEAKER_STORE = "petcheck.speaker";
-  var SPEAKERS = ["Mom", "Dad", "Emma"];
-  var SUGGESTIONS = ["I fed Mochi", "Has anyone walked Biscuit?", "What's left for Mochi today?",
-    "How's Mochi doing this week?", "Mochi threw up this morning", "Book Mochi's checkup next Tuesday at 10"];
-  var state = { key: null, speaker: "Dad", history: [], busy: false, rec: null, listening: false };
+  // The household talks to the kitchen device; Sam, a pet sitter, talks to his phone a few streets away.
+  var SPEAKERS = ["Mom", "Dad", "Emma"], SITTERS = ["Sam"];
+  var SAM_PHONE = { lat: 42.286, lng: -83.747, label: "Kerrytown" };
+  var SUGGESTIONS = {
+    household: ["I fed Mochi", "Has anyone walked Biscuit?", "What's left for Mochi today?", "How's Mochi doing this week?",
+      "We're away this weekend. Can someone walk Biscuit twice a day?", "Has anyone taken our request?"],
+    sitter: ["Any dog walking jobs near me this weekend? At least $20.", "Take the closest one", "What are my bookings?", "I walked Biscuit"],
+  };
+  var state = { key: null, speaker: "Dad", history: [], busy: false, rec: null, listening: false, sessions: {}, gps: null };
+  var role = function () { return SITTERS.indexOf(state.speaker) >= 0 ? "sitter" : "household"; };
+  // One conversation per device, kept server-side (tool calls included) so follow-ups have context.
+  function newSessionId() { return "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10); }
+  function sessionId() { return state.sessions[role()] || (state.sessions[role()] = newSessionId()); }
+  // Device location: the household's address (PetCheck's default), Sam's phone, or this browser's GPS.
+  function deviceLocation() { return state.gps || (role() === "sitter" ? SAM_PHONE : null); }
+  function renderWhere() {
+    var loc = deviceLocation();
+    $("where-text").textContent = "📍 " + (loc ? loc.label : "Household address (Ann Arbor, MI)");
+    $("use-gps").hidden = !!state.gps;
+  }
 
   function $(id) { return document.getElementById(id); }
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { return null; } }
   if (new URLSearchParams(location.search).get("compact")) document.body.classList.add("compact");
   // Demo clock (?time=17:40): Alexa answers as if it's that time today (for recording the demo video).
+  // Video mode (?video=1): third-party model and vendor names are shown generically, since the
+  // hackathon's video rules don't allow third-party trademarks. The description names the model.
+  var VIDEO = new URLSearchParams(location.search).get("video") === "1";
+  if (VIDEO) document.addEventListener("DOMContentLoaded", function () {
+    var foot = document.querySelector("footer"); if (foot) foot.textContent = "Voice in and out runs in your browser. The assistant is a tool-calling AI model with a rules fallback, and reaches PetCheck only through its MCP server.";
+  });
+  var modelName = function (r) { return VIDEO ? "AI model" : r.model; };
   var DEMO_TIME = (function () { var t = new URLSearchParams(location.search).get("time"); return t && /^([01]?\d|2[0-3]):[0-5]\d$/.test(t) ? t : null; })();
 
   // --- Speaker picker & suggestions ---------------------------------------
@@ -236,18 +263,30 @@
   function renderSpeakers() {
     var box = $("speakers"); box.textContent = "";
     box.appendChild(el("span", "lbl", "Speaking:"));
-    SPEAKERS.forEach(function (s) {
-      var b = el("button", "chip" + (s === state.speaker ? " on" : ""), (s === state.speaker ? "🗣 " : "") + s);
+    SPEAKERS.concat(SITTERS).forEach(function (s) {
+      if (s === SITTERS[0]) box.appendChild(el("span", "sep"));
+      var label = s + (SITTERS.indexOf(s) >= 0 ? " · sitter" : "");
+      var b = el("button", "chip" + (s === state.speaker ? " on" : ""), (s === state.speaker ? "🗣 " : "") + label);
       b.type = "button"; b.setAttribute("role", "radio"); b.setAttribute("aria-checked", s === state.speaker);
       b.onclick = function () { state.speaker = s; store(SPEAKER_STORE, s); renderSpeakers(); };
       box.appendChild(b);
     });
+    renderSuggestions(); renderWhere();
   }
-  SUGGESTIONS.forEach(function (s) {
-    var b = el("button", "chip", "“" + s + "”"); b.type = "button";
-    b.onclick = function () { send(s); };
-    $("suggest").appendChild(b);
-  });
+  function renderSuggestions() {
+    var box = $("suggest"); box.textContent = "";
+    SUGGESTIONS[role()].forEach(function (s) {
+      var b = el("button", "chip", "“" + s + "”"); b.type = "button";
+      b.onclick = function () { send(s); };
+      box.appendChild(b);
+    });
+  }
+  $("use-gps").onclick = function () {
+    if (!navigator.geolocation) { mode("", "This browser can't share its location."); return; }
+    navigator.geolocation.getCurrentPosition(function (p) {
+      state.gps = { lat: p.coords.latitude, lng: p.coords.longitude, label: "this device's location" }; renderWhere();
+    }, function () { mode("", "Location not shared; using the household address."); }, { timeout: 8000 });
+  };
 
   // --- Orb / status --------------------------------------------------------
   function mode(m, text) {
@@ -273,8 +312,12 @@
     if (log.querySelector(".empty")) log.textContent = "";
     var pill = $("engine-pill");
     pill.hidden = false;
-    pill.className = "tagpill engine " + (r.engine === "rules" ? "rules" : "bedrock");
-    pill.textContent = r.engine === "rules" ? "Engine: rules (Bedrock pending)" : "Engine: Amazon Bedrock";
+    var unavailable = r.engineNote && / unavailable: /.test(r.engineNote) ? r.engineNote.split(" unavailable: ")[0] : "";
+    pill.className = "tagpill engine " + (r.engine === "rules" ? "rules" : "llm");
+    pill.textContent = r.engine === "rules"
+      ? "Engine: rules" + (unavailable ? " (model unavailable)" : "")
+      : "Engine: " + modelName(r);
+    pill.title = r.engine === "rules" ? (r.engineNote || "") : VIDEO ? "" : r.model + " via " + r.engineLabel;
     var head = el("div", "turn", state.speaker + ": “" + text + "”");
     var frag = document.createDocumentFragment();
     frag.appendChild(head);
@@ -295,9 +338,10 @@
       frag.appendChild(d);
     });
     var engineText = r.engine === "rules"
-      ? "Rules engine (backup)" + (r.engineNote && r.engineNote.indexOf("Bedrock unavailable") === 0 ? " · Bedrock unavailable on this account" : "")
-      : "Amazon Bedrock " + r.model;
-    frag.appendChild(el("div", "model", engineText + " · " + (r.toolCalls || []).length + " tool call(s) · " + r.ms + " ms total"));
+      ? "Rules engine (backup)" + (unavailable ? " · " + unavailable + " unavailable" : "")
+      : VIDEO ? "AI model" : r.model + " via " + r.engineLabel;
+    var context = r.turnsInContext ? " · " + r.turnsInContext + " earlier turn" + (r.turnsInContext > 1 ? "s" : "") + " in context" : "";
+    frag.appendChild(el("div", "model", engineText + " · " + (r.toolCalls || []).length + " tool call(s)" + context + " · " + r.ms + " ms total"));
     log.insertBefore(frag, log.firstChild);
     // Collapse tool bodies from older turns to keep the panel readable.
     var opened = log.querySelectorAll("details.call[open]");
@@ -339,7 +383,10 @@
     fetch("/api/assistant", {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": state.key },
-      body: JSON.stringify(Object.assign({ text: text, speaker: state.speaker, history: state.history.slice(-10) }, DEMO_TIME ? { time: DEMO_TIME } : {})),
+      body: JSON.stringify(Object.assign(
+        { text: text, speaker: state.speaker, role: role(), sessionId: sessionId(), history: state.history.slice(-10) },
+        deviceLocation() ? { location: deviceLocation() } : {},
+        DEMO_TIME ? { time: DEMO_TIME } : {})),
     }).then(function (res) {
       if (res.status === 401) { var e = new Error("unauthorized"); e.unauthorized = true; throw e; }
       return res.json().then(function (j) { if (!res.ok) throw new Error(j.error || res.statusText); return j; });
@@ -357,7 +404,7 @@
   }
 
   $("say").onsubmit = function (ev) { ev.preventDefault(); var v = $("text").value; $("text").value = ""; send(v); };
-  $("clear").onclick = function () { state.history = []; $("convo").textContent = ""; $("convo-hint").hidden = false; mode("", "New conversation. Tap the mic and speak."); };
+  $("clear").onclick = function () { state.history = []; state.sessions = {}; $("convo").textContent = ""; $("convo-hint").hidden = false; mode("", "New conversation. Tap the mic and speak."); };
 
   // --- Voice input (Web Speech API) -------------------------------------------
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -382,7 +429,9 @@
     };
     rec.onerror = function (ev) {
       var msg = ev.error === "not-allowed" ? "Microphone blocked. Allow it in the browser, or type instead." :
-                ev.error === "no-speech" ? "Didn't hear anything. Try again." : "Voice input error: " + ev.error;
+                ev.error === "no-speech" ? "Didn't hear anything. Try again." :
+                ev.error === "network" ? "Speech service unreachable (Chrome sends audio to Google). Check the connection, try Safari, or type instead." :
+                "Voice input error: " + ev.error;
       mode("", msg);
     };
     rec.onend = function () {

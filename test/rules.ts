@@ -4,8 +4,9 @@ import assert from "node:assert/strict";
 import { parseIntent, dateTimeOf, type Intent } from "../src/rules.js";
 
 const ctx = { speaker: "Dad", today: "2026-10-01" }; // a Thursday
-const tool = (i: Intent) => (i.kind === "tool" ? `${i.name} ${JSON.stringify(i.input)}` : `say: ${i.text}`);
-const check = (text: string, expected: RegExp, extra: Partial<typeof ctx & { previousReply: string }> = {}) => {
+const tool = (i: Intent) =>
+  i.kind === "tool" ? `${i.name} ${JSON.stringify(i.input)}${i.then ? ` then ${i.then.name} ${JSON.stringify(i.then.input)}` : ""}` : `say: ${i.text}`;
+const check = (text: string, expected: RegExp, extra: Partial<typeof ctx & { previousReply: string; previousUser: string }> = {}) => {
   const got = tool(parseIntent(text, { ...ctx, ...extra }));
   assert.match(got, expected, `“${text}” → ${got}`);
   console.log(`✔ “${text}” → ${got}`);
@@ -21,6 +22,14 @@ check("Has anyone fed the cat", /^get_status \{"pet":"cat"\}$/);
 check("I walked the dog", /^log_care .*"pet":"dog".*"activity":"walk"/);
 check("What's left for Mochi today?", /^get_status .*"pet":"Mochi"/);
 check("How's Mochi doing this week?", /^weekly_summary .*"pet":"Mochi"/);
+check("How is Mochi doing today?", /^get_status \{"pet":"Mochi"\}$/);
+check("I just walked Biscuit. What else does he need today?", /^log_care .*"pet":"Biscuit".*"activity":"walk".* then get_status \{"pet":"Biscuit"\}$/);
+check("I fed Mochi. How's she doing this week?", /^log_care .*"pet":"Mochi".* then weekly_summary \{"pet":"Mochi"\}$/);
+check("I fed him.", /^log_care \{"activity":"feed","by":"Dad"\}$/); // no pet: the server asks "Which pet?"
+check("Mochi", /^log_care .*"pet":"Mochi".*"activity":"feed"/, {
+  previousUser: "I fed him.",
+  previousReply: "Which pet? You have Mochi and Biscuit.",
+});
 check("Mochi threw up this morning", /^add_note .*"pet":"Mochi".*"text":"Mochi threw up this morning"/);
 check("Book Mochi's checkup next Tuesday at 10", /^add_vet_visit .*"pet":"Mochi".*"date":"2026-10-06".*"time":"10:00".*"reason":"checkup"/);
 check("Vet appointment for Biscuit tomorrow at 3:30 pm", /^add_vet_visit .*"pet":"Biscuit".*"date":"2026-10-02".*"time":"15:30"/);
@@ -32,6 +41,8 @@ check("yes", /^log_care .*"pet":"Mochi".*"activity":"feed".*"confirm":true/, {
 check("no thanks", /^say: Okay, I won't log it again/, {
   previousReply: "Emma already fed Mochi at 7:52 AM, just a minute ago. Do you want me to log it again?",
 });
+check("Can you find a sitter to walk Biscuit this weekend?", /^say: Posting and finding care requests needs the AI assistant/);
+check("Find me dog walking jobs near here", /^say: Posting and finding care requests needs the AI assistant/);
 check("hello", /^say: Hi Dad/);
 check("blah blah", /^say: Sorry, I didn't catch that/);
 

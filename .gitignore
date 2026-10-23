@@ -4,3 +4,6 @@ dist/
 .env.*
 .DS_Store
 *.log
+!.env.example
+.data/
+scripts/video/out/
