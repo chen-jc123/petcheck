@@ -47,7 +47,10 @@ const DEFAULT_ANTHROPIC_EXTRA = { thinking: { type: "disabled" } };
 
 /** The model ASSISTANT_ENGINE selects, or undefined for the rules engine. Throws on incomplete settings. */
 export function modelConfig(setting: string, env: NodeJS.ProcessEnv = process.env): ModelConfig | undefined {
-  const engine = setting === "auto" ? (env.OPENAI_API_KEY ? "openai" : env.ANTHROPIC_API_KEY ? "anthropic" : "bedrock") : setting;
+  // "auto" only picks a protocol that is fully configured (key and model): a stray ANTHROPIC_API_KEY in the
+  // shell, set for some other tool, must not make PetCheck fail.
+  const ready = (p: string) => Boolean(env[`${p}_API_KEY`] && env[`${p}_MODEL`]);
+  const engine = setting === "auto" ? (ready("OPENAI") ? "openai" : ready("ANTHROPIC") ? "anthropic" : "bedrock") : setting;
   if (engine === "rules") return undefined;
   if (engine === "bedrock") return { engine, model: env.BEDROCK_MODEL_ID ?? "us.amazon.nova-lite-v1:0", label: LABELS.bedrock };
   if (engine === "openai" || engine === "anthropic") {

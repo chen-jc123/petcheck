@@ -158,6 +158,7 @@ try {
   assert.throws(() => modelConfig("gpt"), /should be auto, openai, anthropic, bedrock or rules/);
   assert.equal(modelConfig("auto", { ANTHROPIC_API_KEY: "k", ANTHROPIC_MODEL: "m" })?.engine, "anthropic");
   assert.equal(modelConfig("auto", {})?.engine, "bedrock");
+  assert.equal(modelConfig("auto", { ANTHROPIC_API_KEY: "k" })?.engine, "bedrock", "a key without a model is skipped, not an error");
   console.log("✔ settings: incomplete or unknown engines are refused; auto picks openai → anthropic → bedrock");
 
   process.env.ASSISTANT_ENGINE = "auto"; // OPENAI_API_KEY is set, so auto means openai
